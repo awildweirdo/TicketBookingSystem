@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ticket Booking</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .hidden { display: none; }
+        .seat { display: inline-block; width: 40px; height: 40px; margin: 2px; text-align: center; line-height: 40px; border: 1px solid #ccc; cursor: pointer; }
+        .seat.available { background: #fff; }
+        .seat.held { background: #ffd700; cursor: not-allowed; }
+        .seat.booked { background: #ff4500; cursor: not-allowed; }
+        .seat.selected { border: 2px solid #000; background: #e0f7fa; }
+        .nav { margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+        .nav a { margin-right: 15px; text-decoration: none; color: blue; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="#events">Events</a>
+        <span id="nav-user" class="hidden">
+            <a href="#my-bookings">My Bookings</a>
+            <span id="nav-admin" class="hidden"><a href="#admin">Admin</a></span>
+            <span id="nav-organiser" class="hidden"><a href="#organiser">Organiser</a></span>
+            <span style="float: right; font-weight: normal; margin-right: 15px;">
+                <span style="font-size: 1.2em;">👤</span> <span id="user-email-display"></span>
+            </span>
+            <a href="#logout" id="logout-btn" style="float: right;">Logout</a>
+        </span>
+        <span id="nav-guest" style="float: right;">
+            <a href="#login">Login</a>
+            <a href="#register">Register</a>
+        </span>
+        <div style="clear: both;"></div>
+    </div>
+    <div id="app"></div>
+
+    <script>
+        const app = document.getElementById('app');
+        let token = localStorage.getItem('token');
+        let userId = localStorage.getItem('userId');
+        let role = localStorage.getItem('role');
+        let email = localStorage.getItem('email');
+        
+        function updateNav() {
+            if (token) {
+                document.getElementById('nav-user').classList.remove('hidden');
+                document.getElementById('user-email-display').innerText = email;
+                document.getElementById('nav-guest').classList.add('hidden');
+                if (role === 'admin') document.getElementById('nav-admin').classList.remove('hidden');
+                else document.getElementById('nav-admin').classList.add('hidden');
+                if (role === 'organiser' || role === 'admin') document.getElementById('nav-organiser').classList.remove('hidden');
+                else document.getElementById('nav-organiser').classList.add('hidden');
+            } else {
+                document.getElementById('nav-user').classList.add('hidden');
+                document.getElementById('nav-guest').classList.remove('hidden');
+            }
+        }
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            localStorage.clear(); token = null; email = null; updateNav(); window.location.hash = '#events';
+        });
+
+        async function api(path, method = 'GET', body = null) {
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = 'Bearer ' + token;
+            const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : null });
+            if (!res.ok) throw new Error(await res.text());
+            return res.json();
+        }
+
+        function renderEvents() {
+            app.innerHTML = `<h2>Events</h2><div id="events-list">Loading...</div>`;
+            Promise.all([api('/api/events'), api('/api/venues')]).then(([eventsData, venuesData]) => {
+                const venuesMap = {};
+                if (venuesData.venues) venuesData.venues.forEach(v => venuesMap[v.id] = v.name);
+                
+                const list = eventsData.events.map(e => `<div>
+                    <h3>${e.title} (${e.event_type})</h3>
+                    <p><strong>Venue:</strong> ${venuesMap[e.venue_id] || 'Unknown'} | <strong>Time:</strong> ${e.starts_at}</p>
+                    <button onclick="window.location.hash='#event-${e.id}'">View Seats</button>
+                </div><hr>`).join('');
+                document.getElementById('events-list').innerHTML = list || 'No events.';
+            }).catch(e => { document.getElementById('events-list').innerHTML = `<p class="error">${e.message}</p>`; });
+        }
+
+        let pollInterval;
+        function renderEventSeats(eventId) {
+            app.innerHTML = `
+                <div style="display: flex;">
+                    <div style="flex: 2;">
+                        <h2>Event ${eventId} Seats</h2>
+                        <div id="seat-map">Loading...</div>
+                        <div id="actions"></div>
+                        <div id="waitlist-actions" style="margin-top: 20px;"></div>
+                    </div>
+                    <div style="flex: 1; padding: 20px; background: #eef2f3; border-radius: 8px;" id="event-details-panel">
+                        <h3>Event Details</h3>
+                        <p>Loading...</p>
+                    </div>
+                </div>
+            `;
+            
+            // Load event details for the right panel
+            Promise.all([api('/api/events'), api('/api/venues')]).then(([eventsData, venuesData]) => {
+                const ev = eventsData.events.find(e => e.id == eventId);
+                const vName = venuesData.venues ? venuesData.venues.find(v => v.id == ev.venue_id)?.name : '';
+                if(ev) {
+                    document.getElementById('event-details-panel').innerHTML = `
+                        <h3>${ev.title}</h3>
+                        <p><strong>Type:</strong> ${ev.event_type}</p>
+                        <p><strong>Time:</strong> ${ev.starts_at}</p>
+                        <p><strong>Venue:</strong> ${vName || ev.venue_id}</p>
+                    `;
+                }
+            });
+
+            const loadSeats = () => {
+                api(`/api/events/${eventId}/seats`).then(data => {
+                    let mapHtml = '';
+                    let currentRow = -1;
+                    const categoryCounts = {}; // { Standard: { total: 0, available: 0 } }
+                    
+                    data.seats.forEach(s => {
+                        if (s.row_number !== currentRow) {
+                            if (currentRow !== -1) mapHtml += '<br>';
+                            currentRow = s.row_number;
+                        }
+                        mapHtml += `<div class="seat ${s.status}" onclick="holdSeat(${eventId}, '${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
+                        
+                        if (!categoryCounts[s.category]) categoryCounts[s.category] = { total: 0, available: 0 };
+                        categoryCounts[s.category].total++;
+                        if (s.status === 'available') categoryCounts[s.category].available++;
+                    });
+                    document.getElementById('seat-map').innerHTML = mapHtml;
+
+                    // Waitlist UI
+                    let waitlistHtml = '<h3>Waitlist</h3><p>If a category is sold out, join the waitlist!</p>';
+                    Object.keys(categoryCounts).forEach(cat => {
+                        if (categoryCounts[cat].available === 0 && categoryCounts[cat].total > 0) {
+                            waitlistHtml += `<button onclick="joinWaitlist(${eventId}, '${cat}')">Join ${cat} Waitlist</button> `;
+                        }
+                    });
+                    document.getElementById('waitlist-actions').innerHTML = waitlistHtml;
+
+                }).catch(e => console.error(e));
+            };
+            loadSeats();
+            pollInterval = setInterval(loadSeats, 5000);
+        }
+
+        window.joinWaitlist = async function(eventId, category) {
+            if (!token) return alert('Please login first');
+            try {
+                await api(`/api/events/${eventId}/waitlist`, 'POST', { category });
+                alert(`Successfully joined the waitlist for ${category}! You will be emailed if a seat opens up.`);
+            } catch (e) { alert(e.message); }
+        };
+
+        window.holdSeat = async function(eventId, seatId, status) {
+            if (status !== 'available') return;
+            if (!token) return alert('Please login first');
+            try {
+                await api(`/api/events/${eventId}/seats/${seatId}/hold`, 'POST');
+                alert('Seat held! You have 10 minutes to confirm.');
+                // Add confirm button
+                document.getElementById('actions').innerHTML = `<button onclick="confirmSeat(${eventId}, '${seatId}')">Confirm Booking for ${seatId}</button>`;
+            } catch (e) { alert(e.message); }
+        };
+
+        window.confirmSeat = async function(eventId, seatId) {
+            try {
+                await api(`/api/events/${eventId}/seats/${seatId}/confirm`, 'POST');
+                alert('Booking Confirmed!');
+                window.location.hash = '#my-bookings';
+            } catch (e) { alert(e.message); }
+        };
+
+        function renderAuth(isLogin) {
+            app.innerHTML = `<h2>${isLogin ? 'Login' : 'Register'}</h2>
+                <form id="auth-form" onsubmit="event.preventDefault(); authSubmit(${isLogin});">
+                    <input id="email" type="email" placeholder="Email" required><br><br>
+                    <input id="password" type="password" placeholder="Password" required><br><br>
+                    ${!isLogin ? '<select id="role"><option value="customer">Customer</option><option value="organiser">Organiser</option></select><br><br>' : ''}
+                    <button type="submit">${isLogin ? 'Login' : 'Register'}</button>
+                </form>
+            `;
+        }
+
+        window.authSubmit = async function(isLogin) {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const roleEl = document.getElementById('role');
+            const userRole = roleEl ? roleEl.value : 'customer';
+            try {
+                if (isLogin) {
+                    const res = await api('/api/login', 'POST', { email, password });
+                    token = res.token; userId = res.user_id; role = res.role;
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('email', email);
+                    updateNav();
+                    window.location.hash = '#events';
+                } else {
+                    await api('/api/register', 'POST', { email, password, role: userRole });
+                    alert('Registered! Please log in.');
+                    window.location.hash = '#login';
+                }
+            } catch (e) { alert(e.message); }
+        }
+
+        
+        window.cancelBooking = async function(bookingId) {
+            if (!confirm('Are you sure you want to cancel this booking?')) return;
+            try {
+                await api(`/api/me/bookings/${bookingId}/cancel`, 'POST');
+                alert('Booking cancelled successfully.');
+                renderMyBookings();
+            } catch (e) {
+                alert(e.message);
+            }
+        };
+
+        
+        let builderGrid = [];
+        let builderRows = 5;
+        let builderCols = 5;
+
+        function renderAdmin() {
+            if (role !== 'admin') return app.innerHTML = 'Access Denied';
+            app.innerHTML = `<h2>Admin Panel</h2>
+                <h3>Create Venue</h3>
+                <form onsubmit="event.preventDefault(); submitNewVenue();">
+                    <input id="venue-name" type="text" placeholder="Venue Name" required><br><br>
+                    
+                    <div style="background: #eef2f3; padding: 15px; border-radius: 8px;">
+                        <h4>Visual Seat Builder</h4>
+                        <label>Rows: <input type="number" id="v-rows" value="5" style="width: 60px;"></label>
+                        <label>Cols: <input type="number" id="v-cols" value="5" style="width: 60px;"></label>
+                        <button type="button" onclick="generateBuilderGrid()">Generate Grid</button>
+                        <p><small>Click a seat to change its category: <b>Standard -> Premium -> VIP -> Disabled</b></small></p>
+                        
+                        <div id="builder-map" style="margin-top: 15px;"></div>
+                    </div><br>
+
+                    <button type="submit" style="background: #27ae60;">Save Venue</button>
+                </form>
+            `;
+            generateBuilderGrid();
+        }
+
+        window.generateBuilderGrid = function() {
+            builderRows = parseInt(document.getElementById('v-rows').value) || 5;
+            builderCols = parseInt(document.getElementById('v-cols').value) || 5;
+            builderGrid = [];
+            let html = '';
+            
+            for(let r=1; r<=builderRows; r++) {
+                let rowData = [];
+                for(let c=1; c<=builderCols; c++) {
+                    const label = String.fromCharCode(64 + r) + c; // A1, B2...
+                    rowData.push({ label, category: 'Standard', r, c, active: true });
+                    html += `<div class="seat available" id="b-seat-${r}-${c}" onclick="toggleBuilderSeat(${r}, ${c})" title="${label}">S</div>`;
+                }
+                builderGrid.push(rowData);
+                html += '<br>';
+            }
+            document.getElementById('builder-map').innerHTML = html;
+        };
+
+        window.toggleBuilderSeat = function(r, c) {
+            const seat = builderGrid[r-1][c-1];
+            const el = document.getElementById(`b-seat-${r}-${c}`);
+            
+            if (seat.category === 'Standard') {
+                seat.category = 'Premium';
+                el.innerText = 'P';
+                el.className = 'seat held'; // Reusing yellow for premium
+            } else if (seat.category === 'Premium') {
+                seat.category = 'VIP';
+                el.innerText = 'V';
+                el.className = 'seat booked'; // Reusing red for VIP
+            } else if (seat.category === 'VIP') {
+                seat.active = false;
+                seat.category = 'Disabled';
+                el.innerText = 'X';
+                el.style.background = '#ccc';
+                el.style.borderColor = '#999';
+            } else {
+                seat.active = true;
+                seat.category = 'Standard';
+                el.innerText = 'S';
+                el.className = 'seat available';
+                el.style.background = '';
+                el.style.borderColor = '';
+            }
+        };
+
+        window.submitNewVenue = async function() {
+            try {
+                const name = document.getElementById('venue-name').value;
+                const seats = [];
+                
+                builderGrid.forEach(row => {
+                    row.forEach(s => {
+                        if (s.active) {
+                            seats.push({
+                                seat_label: s.label,
+                                category: s.category,
+                                row_number: s.r,
+                                column_number: s.c
+                            });
+                        }
+                    });
+                });
+                
+                if (seats.length === 0) return alert('Cannot create a venue with 0 seats!');
+
+                await api('/api/venues', 'POST', { name, seats });
+                alert('Venue Created with ' + seats.length + ' seats!');
+                document.getElementById('venue-name').value = '';
+                generateBuilderGrid();
+            } catch (e) { alert(e.message); }
+        };
+
+        function renderOrganiser() {
+            if (role !== 'organiser' && role !== 'admin') return app.innerHTML = 'Access Denied';
+            app.innerHTML = `<h2>Organiser Panel</h2>
+                <h3>Create Event</h3>
+                <form onsubmit="event.preventDefault(); submitNewEvent();">
+                    <select id="ev-venue-id" required><option value="">Loading Venues...</option></select><br><br>
+                    <input id="ev-title" type="text" placeholder="Title" required><br><br>
+                    <select id="ev-type"><option value="movie">Movie</option><option value="concert">Concert</option></select><br><br>
+                    <input id="ev-starts" type="datetime-local" required><br><br>
+                    <textarea id="ev-prices" placeholder='[{"category": "Standard", "price_cents": 1000}, {"category": "Premium", "price_cents": 2000}]' rows="3" style="width: 100%;"></textarea><br><br>
+                    <button type="submit">Create Event</button>
+                </form>
+                <hr>
+                <h3>Event Summary</h3>
+                <select id="sum-event-id"><option value="">Select Event...</option></select>
+                <button onclick="loadSummary()">Load</button>
+                <div id="summary-result"></div>
+            `;
+            api('/api/venues').then(data => {
+                const select = document.getElementById('ev-venue-id');
+                if (data.venues && data.venues.length > 0) {
+                    select.innerHTML = data.venues.map(v => `<option value="${v.id}">${v.name}</option>`).join('');
+                } else {
+                    select.innerHTML = '<option value="">No Venues Available</option>';
+                }
+            });
+            api('/api/events').then(data => {
+                const select = document.getElementById('sum-event-id');
+                if (data.events && data.events.length > 0) {
+                    const filtered = role === 'admin' ? data.events : data.events.filter(e => e.organiser_id == userId);
+                    select.innerHTML = '<option value="">Select Event...</option>' + filtered.map(e => `<option value="${e.id}">Event ${e.id}: ${e.title}</option>`).join('');
+                }
+            });
+        }
+
+        window.submitNewEvent = async function() {
+            try {
+                const venue_id = parseInt(document.getElementById('ev-venue-id').value);
+                const title = document.getElementById('ev-title').value;
+                const event_type = document.getElementById('ev-type').value;
+                const starts_at = document.getElementById('ev-starts').value;
+                const prices = JSON.parse(document.getElementById('ev-prices').value || '[]');
+                await api('/api/events', 'POST', { venue_id, title, event_type, starts_at, prices });
+                alert('Event Created!');
+            } catch (e) { alert(e.message); }
+        };
+
+        window.loadSummary = async function() {
+            try {
+                const id = document.getElementById('sum-event-id').value;
+                if (!id) return;
+                const data = await api(`/api/events/${id}/summary`);
+                document.getElementById('summary-result').innerHTML = `
+                    <p>Total Revenue: $${data.total_revenue_cents / 100}</p>
+                    <p>Available: ${data.seat_counts.available || 0}</p>
+                    <p>Held: ${data.seat_counts.held || 0}</p>
+                    <p>Booked: ${data.seat_counts.booked || 0}</p>
+                    <p>Total Seats: ${data.total_seats}</p>
+                `;
+            } catch (e) { alert(e.message); }
+        };
+
+        function renderMyBookings() {
+            app.innerHTML = `<h2>My Bookings</h2><div id="bookings-list">Loading...</div>`;
+            api('/api/me/bookings').then(data => {
+                const list = data.bookings.map(b => `<div>
+                    <h3>Booking ${b.booking_reference} - ${b.event_title}</h3>
+                    <p>Status: ${b.status} | Total: $${b.total_cents/100}</p>
+                    ${b.status === 'confirmed' ? `<button onclick="cancelBooking(${b.id})" style="color:red;">Cancel Booking</button>` : ''}
+                </div><hr>`).join('');
+                document.getElementById('bookings-list').innerHTML = list || 'No bookings found.';
+            }).catch(e => { document.getElementById('bookings-list').innerHTML = `<p class="error">${e.message}</p>`; });
+        }
+
+
+        function router() {
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+            updateNav();
+            const hash = window.location.hash || '#events';
+            if (hash === '#events') renderEvents();
+            else if (hash.startsWith('#event-')) renderEventSeats(hash.split('-')[1]);
+            else if (hash === '#login') renderAuth(true);
+            else if (hash === '#register') renderAuth(false);
+            else if (hash === '#my-bookings') renderMyBookings();
+
+            else if (hash === '#admin') renderAdmin();
+            else if (hash === '#organiser') renderOrganiser();
+
+        }
+
+        window.addEventListener('hashchange', router);
+        router();
+    </script>
+</body>
+</html>
+<script>
+// quick styling fix to make it look slightly better without complicating things
+document.head.insertAdjacentHTML('beforeend', `
+<style>
+body { background-color: #f4f7f6; color: #333; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+.nav { background-color: #2c3e50; padding: 15px; border-radius: 5px; margin-bottom: 25px; }
+.nav a { color: #ecf0f1; font-weight: bold; padding: 5px 10px; border-radius: 3px; }
+.nav a:hover { background-color: #34495e; }
+h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; display: inline-block; }
+button { background-color: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+button:hover { background-color: #2980b9; }
+input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; width: 200px; }
+.seat { border-radius: 5px; box-shadow: 1px 1px 3px rgba(0,0,0,0.1); font-size: 12px; }
+.seat.available { background: #2ecc71; color: white; border-color: #27ae60; }
+.seat.held { background: #f1c40f; color: #333; border-color: #f39c12; }
+.seat.booked { background: #e74c3c; color: white; border-color: #c0392b; }
+</style>
+`);
+</script>
