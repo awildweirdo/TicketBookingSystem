@@ -6,66 +6,163 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎫</text></svg>">
     
 <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --secondary: #475569;
-            --bg-color: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-light: #64748b;
-            --available: #22c55e;
-            --held: #eab308;
+            --primary: #6366f1;
+            --primary-hover: #818cf8;
+            --secondary: #94a3b8;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --text-main: #f8fafc;
+            --text-light: #94a3b8;
+            --available: #10b981;
+            --held: #f59e0b;
             --booked: #ef4444;
-            --disabled: #cbd5e1;
+            --disabled: #334155;
+            --nav-bg: #0b1120;
         }
 
         .hidden { display: none; }
 
         body { 
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
+            font-family: 'Inter', system-ui, -apple-system, sans-serif; 
             margin: 0; 
             padding: 0; 
-            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            background: var(--bg-color);
             color: var(--text-main);
             min-height: 100vh;
         }
 
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        .hidden { display: none; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 32px 20px; }
 
-        .nav { background-color: #1e293b; padding: 15px 30px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); position: sticky; top: 0; z-index: 100; }
-        .nav a { color: #f8fafc; font-weight: 500; padding: 8px 12px; border-radius: 6px; text-decoration: none; transition: background 0.2s; }
-        .nav a:hover { background-color: #334155; }
+        .nav { 
+            background-color: var(--nav-bg); 
+            padding: 16px 30px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); 
+            position: sticky; 
+            top: 0; 
+            z-index: 100; 
+            border-bottom: 1px solid var(--border-color);
+        }
+        .nav a { 
+            color: var(--text-light); 
+            font-weight: 500; 
+            padding: 8px 16px; 
+            border-radius: 8px; 
+            text-decoration: none; 
+            transition: all 0.2s ease; 
+        }
+        .nav a:hover, .nav a.active { 
+            background-color: rgba(99, 102, 241, 0.15); 
+            color: var(--primary-hover); 
+        }
         .nav-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
-        .nav-links { display: flex; align-items: center; gap: 15px; }
+        .nav-links { display: flex; align-items: center; gap: 12px; }
 
-        .card { background: var(--card-bg); border-radius: 12px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05); margin-bottom: 24px; }
-        h2 { color: #0f172a; border-bottom: 3px solid var(--primary); padding-bottom: 8px; margin-top: 0; display: inline-block; }
-        h3 { color: #334155; }
-
-        button { background-color: var(--primary); color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2); }
-        button:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+        .card { 
+            background: var(--card-bg); 
+            border-radius: 16px; 
+            padding: 32px; 
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3); 
+            border: 1px solid var(--border-color);
+            margin-bottom: 32px; 
+        }
+        h2 { color: #ffffff; font-weight: 600; margin-top: 0; margin-bottom: 24px; font-size: 28px; letter-spacing: -0.02em; }
+        h3 { color: #e2e8f0; font-weight: 500; }
         
-        input, select, textarea { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; box-sizing: border-box; margin-bottom: 15px; font-family: inherit; }
-        input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-        .auth-container { max-width: 400px; margin: 80px auto; }
-
-        .seat { display: inline-flex; align-items: center; justify-content: center; width: 45px; height: 45px; margin: 4px; border-radius: 8px; font-size: 13px; font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.05); cursor: pointer; transition: transform 0.1s; }
-        .seat:hover { transform: scale(1.05); }
-        .seat.available { background: var(--available); color: white; border: 1px solid #16a34a; }
-        .seat.held { background: var(--held); color: #713f12; border: 1px solid #ca8a04; }
-        .seat.booked { background: var(--booked); color: white; cursor: not-allowed; border: 1px solid #dc2626; }
-        .seat.disabled { background: var(--disabled); color: #64748b; cursor: not-allowed; border: 1px solid #94a3b8; }
+        button { 
+            background-color: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 12px 24px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 500; 
+            transition: all 0.2s ease; 
+            font-family: inherit;
+        }
+        button:hover { 
+            background-color: var(--primary-hover); 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
         
-        .seat-map-container { background: #f1f5f9; padding: 20px; border-radius: 12px; display: inline-block; margin-bottom: 20px; border: 1px solid #e2e8f0; }
-        .panel-split { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-        @media (max-width: 768px) { .panel-split { grid-template-columns: 1fr; } }
+        input, select, textarea { 
+            padding: 12px 16px; 
+            background-color: #0f172a;
+            color: var(--text-main);
+            border: 1px solid var(--border-color); 
+            border-radius: 8px; 
+            width: 100%; 
+            box-sizing: border-box; 
+            margin-bottom: 20px; 
+            font-family: inherit; 
+            transition: all 0.2s ease;
+        }
+        input:focus, select:focus, textarea:focus { 
+            outline: none; 
+            border-color: var(--primary); 
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15); 
+        }
+        
+        .auth-container { max-width: 420px; margin: 80px auto; }
+        
+        .seat { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            width: 48px; 
+            height: 48px; 
+            margin: 6px; 
+            border-radius: 12px; 
+            font-size: 14px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+        }
+        .seat:hover { transform: scale(1.1); z-index: 10; position: relative; }
+        .seat.available { background: rgba(16, 185, 129, 0.15); color: var(--available); border: 2px solid rgba(16, 185, 129, 0.5); }
+        .seat.held { background: rgba(245, 158, 11, 0.15); color: var(--held); border: 2px solid rgba(245, 158, 11, 0.5); }
+        .seat.booked { background: rgba(239, 68, 68, 0.15); color: var(--booked); cursor: not-allowed; border: 2px solid rgba(239, 68, 68, 0.5); }
+        .seat.disabled { background: var(--disabled); color: #64748b; cursor: not-allowed; border: 2px solid #1e293b; }
+        .seat.selected { background: var(--primary); color: white; border: 2px solid var(--primary-hover); box-shadow: 0 0 15px rgba(99, 102, 241, 0.5); }
+        
+        .seat-map-container { 
+            background: #0b1120; 
+            padding: 32px; 
+            border-radius: 16px; 
+            display: inline-block; 
+            margin-bottom: 24px; 
+            border: 1px solid var(--border-color); 
+            box-shadow: inset 0 2px 15px rgba(0,0,0,0.2);
+        }
+        .panel-split { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; }
+        @media (max-width: 900px) { .panel-split { grid-template-columns: 1fr; } }
+        
         .error { color: var(--booked); font-weight: 500; }
-        .event-card { border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-        .event-card:hover { border-color: #cbd5e1; background: #f8fafc; }
-        .event-info p { margin: 4px 0; color: var(--text-light); }
-    </style>
+        
+        .event-card { 
+            border: 1px solid var(--border-color); 
+            padding: 24px; 
+            border-radius: 12px; 
+            margin-bottom: 20px; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            background: rgba(30, 41, 59, 0.5);
+            transition: all 0.2s ease;
+        }
+        .event-card:hover { 
+            border-color: var(--primary); 
+            background: var(--card-bg); 
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        .event-info p { margin: 6px 0; color: var(--text-light); }
+        .event-info h3 { color: #ffffff; margin-top: 0; font-size: 20px; margin-bottom: 12px; }
+</style>
 </head>
 <body>
     <div class="nav">
@@ -367,7 +464,7 @@
                 <form onsubmit="event.preventDefault(); submitNewVenue();">
                     <input id="venue-name" type="text" placeholder="Venue Name" required><br><br>
                     
-                    <div style="background: #eef2f3; padding: 15px; border-radius: 8px;">
+                    <div style="background: var(--nav-bg); padding: 15px; border-radius: 8px;">
                         <h4>Visual Seat Builder</h4>
                         <label>Rows: <input type="number" id="v-rows" value="5" style="width: 60px;"></label>
                         <label>Cols: <input type="number" id="v-cols" value="5" style="width: 60px;"></label>
