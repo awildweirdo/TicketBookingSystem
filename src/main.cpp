@@ -901,6 +901,7 @@ int main()
         }
     });
 
+    seed_admin(db.get());
     app.port(port).multithreaded().run();
     running = false;
     if (maintenance_thread.joinable()) {
