@@ -4,6 +4,8 @@ A full-stack movie/concert ticket booking platform built in **C++17** using the 
 
 **🔗 Live Demo:** [https://ticketbookingsystem-h2to.onrender.com/](https://ticketbookingsystem-h2to.onrender.com/)
 
+> ⚠️ **Note:** Booking confirmation and waitlist offer emails may land in your **spam/junk folder**. This is because the sender email domain has not been authenticated with SendGrid (SPF/DKIM), causing Gmail and other providers to flag the emails.
+
 ---
 
 ## Features
