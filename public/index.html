@@ -19,7 +19,7 @@
             --disabled: #cbd5e1;
         }
 
-        .hidden { display: none !important; }
+        .hidden { display: none; }
 
         body { 
             font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; 
@@ -106,7 +106,7 @@
                 document.getElementById('nav-user-left').style.display = 'flex';
                 document.getElementById('nav-user-right').style.display = 'flex';
                 document.getElementById('user-email-display').innerText = email;
-                document.getElementById('nav-guest').classList.add('hidden');
+                document.getElementById('nav-guest').style.display = 'none';
                 if (role === 'admin') document.getElementById('nav-admin').classList.remove('hidden');
                 else document.getElementById('nav-admin').classList.add('hidden');
                 if (role === 'organiser' || role === 'admin') document.getElementById('nav-organiser').classList.remove('hidden');
@@ -114,7 +114,7 @@
             } else {
                 document.getElementById('nav-user-left').style.display = 'none';
                 document.getElementById('nav-user-right').style.display = 'none';
-                document.getElementById('nav-guest').classList.remove('hidden');
+                document.getElementById('nav-guest').style.display = 'flex';
             }
         }
         document.getElementById('logout-btn').addEventListener('click', () => {
