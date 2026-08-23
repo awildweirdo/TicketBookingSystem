@@ -32,6 +32,26 @@ namespace
     }
 }
 
+
+void seed_admin(sqlite3* db) {
+    sqlite3_stmt *stmt = nullptr;
+    const char* check_sql = "SELECT id FROM users WHERE email = 'admin@admin.com';";
+    if (sqlite3_prepare_v2(db, check_sql, -1, &stmt, nullptr) == SQLITE_OK) {
+        if (sqlite3_step(stmt) != SQLITE_ROW) {
+            sqlite3_finalize(stmt);
+            const char* insert_sql = "INSERT INTO users (email, password_hash, role) VALUES (?, ?, 'admin');";
+            if (sqlite3_prepare_v2(db, insert_sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                sqlite3_bind_text(stmt, 1, "admin@admin.com", -1, SQLITE_STATIC);
+                std::string hashed = auth::hash_password("password123");
+                sqlite3_bind_text(stmt, 2, hashed.c_str(), -1, SQLITE_TRANSIENT);
+                sqlite3_step(stmt);
+                std::cout << "Seeded default admin account: admin@admin.com / password123" << std::endl;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+}
+
 int main()
 {
     const char* db_path_env = std::getenv("DB_PATH");
