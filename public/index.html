@@ -192,12 +192,22 @@
                 api(`/api/events/${eventId}/seats`).then(data => {
                     let mapHtml = '';
                     let currentRow = -1;
+                    let currentCol = 0;
                     const categoryCounts = {}; // { Standard: { total: 0, available: 0 } }
                     
                     data.seats.forEach(s => {
                         if (s.row_number !== currentRow) {
                             if (currentRow !== -1) mapHtml += '<br>';
                             currentRow = s.row_number;
+                            currentCol = 0;
+                        }
+                        // Insert invisible placeholders for any missing column positions (disabled/gap seats)
+                        if (s.column_number > 0) {
+                            while (currentCol + 1 < s.column_number) {
+                                mapHtml += '<div class="seat" style="visibility:hidden;"></div>';
+                                currentCol++;
+                            }
+                            currentCol = s.column_number;
                         }
                         mapHtml += `<div class="seat ${s.status}" onclick="holdSeat(${eventId}, '${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
                         

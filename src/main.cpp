@@ -74,12 +74,68 @@ int main()
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
         sqlite3_exec(db.get(), "INSERT OR IGNORE INTO users(id, email, password_hash, role) VALUES(1, 'organiser@demo.local', '', 'organiser');", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
-        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at) VALUES(1, 1, 1, 'Demo Movie Night', 'movie', datetime('now'));", nullptr, nullptr, &seed_err);
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at) VALUES(1, 1, 1, 'Coldplay Live', 'concert', datetime('now', '+7 days'));", nullptr, nullptr, &seed_err);
+        if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
+        
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at) VALUES(2, 1, 1, 'Dune: Part Two', 'movie', datetime('now', '+1 days'));", nullptr, nullptr, &seed_err);
+        if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
+
+        // Seed prices for event 1 (Coldplay)
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO event_prices(event_id, category, price_cents) VALUES(1, 'VIP', 15000), (1, 'Premium', 8000), (1, 'Standard', 4500);", nullptr, nullptr, &seed_err);
+        if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
+
+        // Seed prices for event 2 (Dune)
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO event_prices(event_id, category, price_cents) VALUES(2, 'VIP', 2500), (2, 'Premium', 1800), (2, 'Standard', 1200);", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
 
         db_booking_service = std::make_unique<DBBookingService>(db.get(), std::chrono::minutes(10));
-        db_booking_service->add_seat("A1", "Standard");
-        db_booking_service->add_seat("A2", "Premium");
+        
+        // Seed a 6x10 grid for both events ONLY if they don't already have seats
+        sqlite3_stmt *check_stmt = nullptr;
+        if (sqlite3_prepare_v2(db.get(), "SELECT COUNT(*) FROM event_seats WHERE event_id = 1", -1, &check_stmt, nullptr) == SQLITE_OK) {
+            if (sqlite3_step(check_stmt) == SQLITE_ROW && sqlite3_column_int(check_stmt, 0) == 0) {
+                // Also seed venue_seats for Demo Venue so row/column positions are available via JOIN
+                for (int row = 0; row < 6; ++row) {
+                    std::string cat = "Standard";
+                    if (row == 0) cat = "VIP";
+                    else if (row == 1 || row == 2) cat = "Premium";
+                    
+                    for (int col = 1; col <= 10; ++col) {
+                        std::string seat_id = std::string(1, 'A' + row) + std::to_string(col);
+                        sqlite3_stmt* vs_stmt;
+                        if (sqlite3_prepare_v2(db.get(), "INSERT OR IGNORE INTO venue_seats(venue_id, seat_label, category, row_number, column_number) VALUES(?, ?, ?, ?, ?)", -1, &vs_stmt, nullptr) == SQLITE_OK) {
+                            sqlite3_bind_int(vs_stmt, 1, 1); // Demo Venue id=1
+                            sqlite3_bind_text(vs_stmt, 2, seat_id.c_str(), -1, SQLITE_STATIC);
+                            sqlite3_bind_text(vs_stmt, 3, cat.c_str(), -1, SQLITE_STATIC);
+                            sqlite3_bind_int(vs_stmt, 4, row + 1);
+                            sqlite3_bind_int(vs_stmt, 5, col);
+                            sqlite3_step(vs_stmt);
+                            sqlite3_finalize(vs_stmt);
+                        }
+                    }
+                }
+                for (int ev = 1; ev <= 2; ++ev) {
+                    for (int row = 0; row < 6; ++row) {
+                        std::string cat = "Standard";
+                        if (row == 0) cat = "VIP";
+                        else if (row == 1 || row == 2) cat = "Premium";
+                        
+                        for (int col = 1; col <= 10; ++col) {
+                            std::string seat_id = std::string(1, 'A' + row) + std::to_string(col);
+                            sqlite3_stmt* insert_stmt;
+                            if (sqlite3_prepare_v2(db.get(), "INSERT INTO event_seats(event_id, seat_label, category, status) VALUES(?, ?, ?, 'available')", -1, &insert_stmt, nullptr) == SQLITE_OK) {
+                                sqlite3_bind_int(insert_stmt, 1, ev);
+                                sqlite3_bind_text(insert_stmt, 2, seat_id.c_str(), -1, SQLITE_STATIC);
+                                sqlite3_bind_text(insert_stmt, 3, cat.c_str(), -1, SQLITE_STATIC);
+                                sqlite3_step(insert_stmt);
+                                sqlite3_finalize(insert_stmt);
+                            }
+                        }
+                    }
+                }
+            }
+            sqlite3_finalize(check_stmt);
+        }
     }
     else
     {
