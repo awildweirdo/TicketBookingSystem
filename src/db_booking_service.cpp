@@ -271,6 +271,73 @@ int DBBookingService::get_or_create_user(const std::string &customer_id) const
     return static_cast<int>(sqlite3_last_insert_rowid(db_));
 }
 
+
+HoldResult DBBookingService::hold_seats(const std::vector<std::string> &seat_ids, const std::string &customer_id)
+{
+    release_expired_holds();
+    const int user_id = get_or_create_user(customer_id);
+    if (user_id == 0)
+    {
+        return {false, "Failed to resolve customer"};
+    }
+
+    if (seat_ids.empty())
+    {
+        return {false, "No seats provided"};
+    }
+
+    char *errmsg = nullptr;
+    if (sqlite3_exec(db_, "BEGIN IMMEDIATE;", nullptr, nullptr, &errmsg) != SQLITE_OK)
+    {
+        if (errmsg)
+            sqlite3_free(errmsg);
+        return {false, "DB busy"};
+    }
+
+    const std::string mod = "+" + std::to_string(ttl_seconds()) + " seconds";
+    const char *update_sql =
+        "UPDATE event_seats SET status='held', held_by=?, hold_expires_at=datetime('now', ?) "
+        "WHERE event_id = ? AND seat_label = ? AND status='available';";
+    
+    int successful_holds = 0;
+    for (const auto& seat_id : seat_ids)
+    {
+        sqlite3_stmt *up = nullptr;
+        if (sqlite3_prepare_v2(db_, update_sql, -1, &up, nullptr) != SQLITE_OK)
+        {
+            sqlite3_finalize(up);
+            sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+            return {false, "DB error"};
+        }
+        sqlite3_bind_int(up, 1, user_id);
+        sqlite3_bind_text(up, 2, mod.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(up, 3, event_id_);
+        sqlite3_bind_text(up, 4, seat_id.c_str(), -1, SQLITE_TRANSIENT);
+        
+        if (sqlite3_step(up) != SQLITE_DONE)
+        {
+            sqlite3_finalize(up);
+            sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+            return {false, "Failed to hold seat"};
+        }
+        sqlite3_finalize(up);
+
+        if (sqlite3_changes(db_) == 1)
+        {
+            successful_holds++;
+        }
+    }
+
+    if (successful_holds != seat_ids.size())
+    {
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        return {false, "One or more seats are not available"};
+    }
+
+    sqlite3_exec(db_, "COMMIT;", nullptr, nullptr, nullptr);
+    return {true, "Seats held successfully"};
+}
+
 HoldResult DBBookingService::hold_seat(const std::string &seat_id, const std::string &customer_id)
 {
     release_expired_holds();
@@ -696,7 +763,7 @@ WaitlistOfferResult DBBookingService::cancel_booking_by_id(int booking_id, const
     return {true, first_token ? "Booking cancelled and waitlist offered" : "Booking cancelled", first_token};
 }
 
-WaitlistJoinResult DBBookingService::join_waitlist(const std::string &category, const std::string &customer_id)
+WaitlistJoinResult DBBookingService::join_waitlist(const std::string &category, const std::string &customer_id, int seat_count)
 {
     const int user_id = get_or_create_user(customer_id);
     if (user_id == 0)
@@ -739,7 +806,7 @@ WaitlistJoinResult DBBookingService::join_waitlist(const std::string &category, 
     sqlite3_finalize(dup);
 
     sqlite3_stmt *stmt = nullptr;
-    if (sqlite3_prepare_v2(db_, "INSERT INTO waitlist_entries(event_id, customer_id, category, status) VALUES(?, ?, ?, 'waiting');", -1, &stmt, nullptr) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db_, "INSERT INTO waitlist_entries(event_id, customer_id, category, seat_count, status) VALUES(?, ?, ?, ?, 'waiting');", -1, &stmt, nullptr) != SQLITE_OK)
     {
         sqlite3_finalize(stmt);
         return {false, "DB error", 0};
@@ -747,6 +814,7 @@ WaitlistJoinResult DBBookingService::join_waitlist(const std::string &category, 
     sqlite3_bind_int(stmt, 1, event_id_);
     sqlite3_bind_int(stmt, 2, user_id);
     sqlite3_bind_text(stmt, 3, category.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 4, seat_count);
     if (sqlite3_step(stmt) != SQLITE_DONE)
     {
         sqlite3_finalize(stmt);
@@ -869,9 +937,10 @@ HoldResult DBBookingService::accept_waitlist_offer(const std::string &offer_toke
     }
 
     sqlite3_stmt *entry_stmt = nullptr;
-    if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='fulfilled' WHERE id = ?;", -1, &entry_stmt, nullptr) == SQLITE_OK)
+    if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='fulfilled' WHERE id = ? AND seat_count <= (SELECT COUNT(*) + 1 FROM waitlist_offers WHERE waitlist_entry_id = ? AND completed_at IS NOT NULL);", -1, &entry_stmt, nullptr) == SQLITE_OK)
     {
         sqlite3_bind_int(entry_stmt, 1, waitlist_entry_id);
+        sqlite3_bind_int(entry_stmt, 2, waitlist_entry_id);
         sqlite3_step(entry_stmt);
     }
     sqlite3_finalize(entry_stmt);
@@ -930,7 +999,7 @@ std::vector<std::string> DBBookingService::expire_waitlist_offers()
         "SELECT we.id, wo.event_seat_id, we.event_id, we.category "
         "FROM waitlist_entries we "
         "JOIN waitlist_offers wo ON wo.waitlist_entry_id = we.id "
-        "WHERE we.status = 'offered' AND wo.completed_at IS NULL "
+        "WHERE we.status IN ('waiting', 'offered') AND wo.completed_at IS NULL "
         "AND datetime(wo.expires_at) <= datetime('now') "
         "AND (? <= 0 OR we.event_id = ?);";
     if (sqlite3_prepare_v2(db_, sel_sql, -1, &sel, nullptr) != SQLITE_OK)
@@ -957,7 +1026,7 @@ std::vector<std::string> DBBookingService::expire_waitlist_offers()
     for (const auto &row : expired)
     {
         sqlite3_stmt *upd = nullptr;
-        if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='expired' WHERE id = ? AND status='offered';", -1, &upd, nullptr) == SQLITE_OK)
+        if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='expired' WHERE id = ? AND status IN ('waiting', 'offered');", -1, &upd, nullptr) == SQLITE_OK)
         {
             sqlite3_bind_int(upd, 1, row.entry_id);
             sqlite3_step(upd);
@@ -985,9 +1054,12 @@ std::optional<std::string> DBBookingService::offer_next_waitlist_for_category(co
 {
     sqlite3_stmt *stmt = nullptr;
     const char *sql =
-        "SELECT we.id, u.email, e.title FROM waitlist_entries we "
+        "SELECT we.id, u.email, e.title, we.seat_count, "
+        "(SELECT COUNT(*) FROM waitlist_offers wo WHERE wo.waitlist_entry_id = we.id AND (wo.completed_at IS NOT NULL OR wo.expires_at > datetime('now'))) as active_offers "
+        "FROM waitlist_entries we "
         "JOIN users u ON u.id = we.customer_id JOIN events e ON e.id = we.event_id "
-        "WHERE we.event_id = ? AND we.category = ? AND we.status = 'waiting' "
+        "WHERE we.event_id = ? AND we.category = ? AND we.status IN ('waiting', 'offered') "
+        "GROUP BY we.id HAVING active_offers < we.seat_count "
         "ORDER BY we.joined_at ASC, we.id ASC LIMIT 1;";
     if (sqlite3_prepare_v2(db_, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
@@ -1007,25 +1079,30 @@ std::optional<std::string> DBBookingService::offer_next_waitlist_for_category(co
     const char *event_title_c = reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2));
     const std::string customer_email = customer_email_c ? customer_email_c : "";
     const std::string event_title = event_title_c ? event_title_c : "";
+    const int seat_count = sqlite3_column_int(stmt, 3);
+    const int active_offers = sqlite3_column_int(stmt, 4);
     sqlite3_finalize(stmt);
 
     const std::string token = random_token();
     const std::string token_hash = sha256_hex(token);
     const std::string mod = "+" + std::to_string(ttl_seconds()) + " seconds";
 
-    sqlite3_stmt *upd = nullptr;
-    if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='offered' WHERE id = ?;", -1, &upd, nullptr) != SQLITE_OK)
+    if (active_offers + 1 >= seat_count)
     {
+        sqlite3_stmt *upd = nullptr;
+        if (sqlite3_prepare_v2(db_, "UPDATE waitlist_entries SET status='offered' WHERE id = ?;", -1, &upd, nullptr) != SQLITE_OK)
+        {
+            sqlite3_finalize(upd);
+            return std::nullopt;
+        }
+        sqlite3_bind_int(upd, 1, waitlist_entry_id);
+        if (sqlite3_step(upd) != SQLITE_DONE)
+        {
+            sqlite3_finalize(upd);
+            return std::nullopt;
+        }
         sqlite3_finalize(upd);
-        return std::nullopt;
     }
-    sqlite3_bind_int(upd, 1, waitlist_entry_id);
-    if (sqlite3_step(upd) != SQLITE_DONE)
-    {
-        sqlite3_finalize(upd);
-        return std::nullopt;
-    }
-    sqlite3_finalize(upd);
 
     sqlite3_stmt *offer_stmt = nullptr;
     if (sqlite3_prepare_v2(db_, "INSERT INTO waitlist_offers(waitlist_entry_id, event_seat_id, token_hash, expires_at) VALUES(?, ?, ?, datetime('now', ?));", -1, &offer_stmt, nullptr) != SQLITE_OK)

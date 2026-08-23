@@ -31,9 +31,10 @@ public:
     HoldResult hold_seat(const std::string &seat_id, const std::string &customer_id);
     HoldResult confirm_seat(const std::string &seat_id, const std::string &customer_id);
     HoldResult confirm_held_seats(const std::string &customer_id);
+    HoldResult hold_seats(const std::vector<std::string> &seat_ids, const std::string &customer_id);
     WaitlistOfferResult cancel_booking(const std::string &seat_id, const std::string &customer_id);
     WaitlistOfferResult cancel_booking_by_id(int booking_id, const std::string &customer_id);
-    WaitlistJoinResult join_waitlist(const std::string &category, const std::string &customer_id);
+    WaitlistJoinResult join_waitlist(const std::string &category, const std::string &customer_id, int seat_count = 1);
     HoldResult accept_waitlist_offer(const std::string &offer_token, const std::string &customer_id);
     std::size_t release_expired_holds();
     std::vector<std::string> expire_waitlist_offers();

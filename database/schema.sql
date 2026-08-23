@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS waitlist_entries (
     customer_id INTEGER NOT NULL REFERENCES users(id),
     category TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting', 'offered', 'fulfilled', 'expired')),
+    seat_count INTEGER NOT NULL DEFAULT 1,
     joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
