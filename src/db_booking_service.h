@@ -44,11 +44,12 @@ public:
 
 private:
     int get_or_create_user(const std::string &customer_id) const;
-    std::optional<std::string> offer_next_waitlist_for_category(const std::string &category, int event_seat_id);
+    std::optional<int> offer_next_waitlist_for_category(const std::string &category, int event_seat_id);
     long ttl_seconds() const;
     void mark_related_booking_cancelled(int event_seat_id, int user_id);
 
     sqlite3 *db_{nullptr};
     std::chrono::steady_clock::duration hold_ttl_{};
+    void process_waitlist_batches(const std::vector<int>& affected_entry_ids);
     int event_id_{1};
 };

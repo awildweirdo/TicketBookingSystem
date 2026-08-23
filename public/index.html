@@ -162,6 +162,21 @@
         }
         .event-info p { margin: 6px 0; color: var(--text-light); }
         .event-info h3 { color: #ffffff; margin-top: 0; font-size: 20px; margin-bottom: 12px; }
+        
+        .screen-indicator {
+            text-align: center;
+            margin: 0 auto 20px auto;
+            padding: 10px 0;
+            background: linear-gradient(180deg, rgba(99,102,241,0.3) 0%, transparent 100%);
+            border-top: 3px solid var(--primary);
+            border-radius: 0 0 50% 50%;
+            color: var(--text-light);
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            width: 80%;
+        }
 </style>
 </head>
 <body>
@@ -291,46 +306,60 @@
 
             window.loadSeats = () => {
                 api(`/api/events/${eventId}/seats`).then(data => {
-                    let mapHtml = '';
-                    let currentRow = -1;
-                    let currentCol = 0;
-                    const categoryCounts = {}; // { Standard: { total: 0, available: 0 } }
-                    
+                    // Determine grid dimensions
+                    let maxRow = 0, maxCol = 0;
                     data.seats.forEach(s => {
-                        if (s.row_number !== currentRow) {
-                            if (currentRow !== -1) mapHtml += '<br>';
-                            currentRow = s.row_number;
-                            currentCol = 0;
-                        }
-                        // Insert invisible placeholders for any missing column positions (disabled/gap seats)
-                        if (s.column_number > 0) {
-                            while (currentCol + 1 < s.column_number) {
-                                mapHtml += '<div class="seat" style="visibility:hidden;"></div>';
-                                currentCol++;
-                            }
-                            currentCol = s.column_number;
-                        }
-                        
-                        let cls = s.status;
-                        if (selectedSeats.includes(s.id)) cls += ' selected';
-                        mapHtml += `<div class="seat ${cls}" onclick="toggleSeat('${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
-
-                        
-                        if (!categoryCounts[s.category]) categoryCounts[s.category] = { total: 0, available: 0 };
-                        categoryCounts[s.category].total++;
-                        if (s.status === 'available') categoryCounts[s.category].available++;
+                        if (s.row_number > maxRow) maxRow = s.row_number;
+                        if (s.column_number > maxCol) maxCol = s.column_number;
                     });
+                    
+                    // Build a lookup map
+                    const seatMap = {};
+                    data.seats.forEach(s => { seatMap[s.row_number + '-' + s.column_number] = s; });
+
+                    const categoryCounts = {};
+                    let mapHtml = '<div class="screen-indicator">SCREEN</div>';
+                    mapHtml += `<div class="seat-grid" style="display:grid; grid-template-columns: repeat(${maxCol}, 48px); gap: 6px; justify-content: center;">`;
+                    
+                    for (let r = 1; r <= maxRow; r++) {
+                        for (let c = 1; c <= maxCol; c++) {
+                            const s = seatMap[r + '-' + c];
+                            if (s) {
+                                let cls = s.status;
+                                if (selectedSeats.includes(s.id)) cls += ' selected';
+                                mapHtml += `<div class="seat ${cls}" onclick="toggleSeat('${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
+                                
+                                if (!categoryCounts[s.category]) categoryCounts[s.category] = { total: 0, available: 0 };
+                                categoryCounts[s.category].total++;
+                                if (s.status === 'available') categoryCounts[s.category].available++;
+                            } else {
+                                mapHtml += '<div class="seat" style="visibility:hidden;"></div>';
+                            }
+                        }
+                    }
+                    mapHtml += '</div>';
                     document.getElementById('seat-map').innerHTML = mapHtml;
 
                     // Waitlist UI
-                    
                     let waitlistHtml = '<h3>Waitlist</h3><p>If a category is sold out, join the waitlist!</p>';
-                    waitlistHtml += 'Count: <input type="number" id="waitlistCount" value="1" min="1" style="width: 50px;"> ';
+                    let hasSoldOut = false;
                     Object.keys(categoryCounts).forEach(cat => {
                         if (categoryCounts[cat].available === 0 && categoryCounts[cat].total > 0) {
-                            waitlistHtml += `<button onclick="joinWaitlist(${eventId}, '${cat}')">Join ${cat} Waitlist</button> `;
+                            hasSoldOut = true;
                         }
                     });
+                    if (hasSoldOut) {
+                        waitlistHtml += '<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px;">';
+                        waitlistHtml += '<label style="color:var(--text-light);">Seats: <input type="number" id="waitlistCount" value="1" min="1" style="width:60px; background:var(--nav-bg); color:var(--text-main); border:1px solid var(--border-color); border-radius:6px; padding:8px; margin:0;"></label>';
+                        Object.keys(categoryCounts).forEach(cat => {
+                            if (categoryCounts[cat].available === 0 && categoryCounts[cat].total > 0) {
+                                waitlistHtml += `<button onclick="joinWaitlist(${eventId}, '${cat}')">Join ${cat} Waitlist</button> `;
+                            }
+                        });
+                        waitlistHtml += '</div>';
+                    } else {
+                        waitlistHtml += '<p style="color:var(--text-light); font-style:italic;">All categories have seats available.</p>';
+                    }
 
                     document.getElementById('waitlist-actions').innerHTML = waitlistHtml;
 
@@ -483,7 +512,8 @@
             builderRows = parseInt(document.getElementById('v-rows').value) || 5;
             builderCols = parseInt(document.getElementById('v-cols').value) || 5;
             builderGrid = [];
-            let html = '';
+            let html = '<div class="screen-indicator">SCREEN</div>';
+            html += `<div style="display:grid; grid-template-columns: repeat(${builderCols}, 48px); gap: 6px; justify-content: center;">`;
             
             for(let r=1; r<=builderRows; r++) {
                 let rowData = [];
@@ -493,8 +523,8 @@
                     html += `<div class="seat available" id="b-seat-${r}-${c}" onclick="toggleBuilderSeat(${r}, ${c})" title="${label}">S</div>`;
                 }
                 builderGrid.push(rowData);
-                html += '<br>';
             }
+            html += '</div>';
             document.getElementById('builder-map').innerHTML = html;
         };
 
@@ -514,8 +544,9 @@
                 seat.active = false;
                 seat.category = 'Disabled';
                 el.innerText = 'X';
-                el.style.background = '#ccc';
-                el.style.borderColor = '#999';
+                el.style.background = '#334155';
+                el.style.borderColor = '#475569';
+                el.style.color = '#64748b';
             } else {
                 seat.active = true;
                 seat.category = 'Standard';
@@ -634,6 +665,29 @@
         }
 
 
+        
+        async function renderWaitlistAccept(queryStr) {
+            app.innerHTML = '<div class="card"><h2>Waitlist Offer</h2><p>Processing your waitlist offer...</p></div>';
+            const params = new URLSearchParams(queryStr);
+            const eventId = params.get('event_id');
+            const tokenStr = params.get('token');
+            if (!eventId || !tokenStr) {
+                app.innerHTML = '<div class="card"><h2>Error</h2><p class="error">Invalid link.</p></div>';
+                return;
+            }
+            if (!token) {
+                alert('Please login to claim your waitlist ticket.');
+                window.location.hash = '#login';
+                return;
+            }
+            try {
+                const res = await api(`/api/events/${eventId}/waitlist/${tokenStr}/accept`, 'POST');
+                app.innerHTML = `<div class="card"><h2>Success!</h2><p>Your waitlist ticket has been claimed! Booking reference: ${res.booking_reference || 'Confirmed'}</p><button onclick="window.location.hash='#my-bookings'">View My Bookings</button></div>`;
+            } catch (e) {
+                app.innerHTML = `<div class="card"><h2>Error</h2><p class="error">${e.message}</p></div>`;
+            }
+        }
+
         function router() {
             if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
             updateNav();
@@ -645,7 +699,8 @@
             else if (hash === '#my-bookings') renderMyBookings();
 
             else if (hash === '#admin') renderAdmin();
-            else if (hash === '#organiser') renderOrganiser();
+                        else if (hash === '#organiser') renderOrganiser();
+            else if (hash.startsWith('#waitlist-accept?')) renderWaitlistAccept(hash.split('?')[1]);
 
         }
 
