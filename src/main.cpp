@@ -691,7 +691,11 @@ int main()
             }
 
             DBBookingService event_service(db.get(), std::chrono::minutes(10), event_id);
-            const auto result = event_service.join_waitlist(body["category"].s(), customer_identifier);
+            int count = 1;
+            if (body.has("count") && body["count"].t() == crow::json::type::Number) {
+                count = body["count"].i();
+            }
+            const auto result = event_service.join_waitlist(body["category"].s(), customer_identifier, count);
             crow::json::wvalue response;
             response["success"] = result.success;
             response["message"] = result.message;
@@ -804,7 +808,109 @@ int main()
         return crow::response(cancel_result.success ? 200 : 400, response);
     });
 
-    CROW_ROUTE(app, "/api/events/<int>/seats/<string>/hold").methods(crow::HTTPMethod::POST)([&db,get_email_for_user](const crow::request &request, int event_id, const std::string &seat_id)
+    
+    CROW_ROUTE(app, "/api/events/<int>/hold-bulk").methods(crow::HTTPMethod::POST)([&db,get_email_for_user](const crow::request &request, int event_id)
+    {
+            const auto body = crow::json::load(request.body);
+            const std::string auth_hdr = request.get_header_value("Authorization");
+            std::string customer_identifier;
+
+            if (!auth_hdr.empty() && auth_hdr.rfind("Bearer ", 0) == 0)
+            {
+                const std::string token = auth_hdr.substr(7);
+                const char *secret_env = std::getenv("JWT_SECRET");
+                const std::string secret = secret_env ? secret_env : std::string("dev-secret");
+                const auto payload = auth::verify_jwt(token, secret);
+                if (!payload.has_value())
+                {
+                    return crow::response(401, "invalid token");
+                }
+                if (payload->role != "customer")
+                {
+                    return crow::response(403, "insufficient role");
+                }
+                auto email_opt = get_email_for_user(payload->user_id);
+                if (!email_opt.has_value())
+                {
+                    return crow::response(500, "user record not found");
+                }
+                customer_identifier = *email_opt;
+            }
+            else
+            {
+                if (!body || !body.has("customer_id") || body["customer_id"].t() != crow::json::type::String)
+                {
+                    return crow::response(400, "customer_id is required when no Authorization header provided");
+                }
+                customer_identifier = body["customer_id"].s();
+            }
+
+            if (!body.has("seat_ids") || body["seat_ids"].t() != crow::json::type::List)
+            {
+                return crow::response(400, "seat_ids must be a list");
+            }
+            std::vector<std::string> seat_ids;
+            for (const auto& seat_id : body["seat_ids"])
+            {
+                seat_ids.push_back(seat_id.s());
+            }
+
+            DBBookingService event_service(db.get(), std::chrono::minutes(10), event_id);
+            const auto result = event_service.hold_seats(seat_ids, customer_identifier);
+            crow::json::wvalue response;
+            response["success"] = result.success;
+            response["message"] = result.message;
+            return crow::response(result.success ? 201 : 409, response);
+    });
+
+    CROW_ROUTE(app, "/api/events/<int>/confirm-held").methods(crow::HTTPMethod::POST)([&db,get_email_for_user](const crow::request &request, int event_id)
+    {
+            const std::string auth_hdr = request.get_header_value("Authorization");
+            std::string customer_identifier;
+
+            if (!auth_hdr.empty() && auth_hdr.rfind("Bearer ", 0) == 0)
+            {
+                const std::string token = auth_hdr.substr(7);
+                const char *secret_env = std::getenv("JWT_SECRET");
+                const std::string secret = secret_env ? secret_env : std::string("dev-secret");
+                const auto payload = auth::verify_jwt(token, secret);
+                if (!payload.has_value())
+                {
+                    return crow::response(401, "invalid token");
+                }
+                if (payload->role != "customer")
+                {
+                    return crow::response(403, "insufficient role");
+                }
+                auto email_opt = get_email_for_user(payload->user_id);
+                if (!email_opt.has_value())
+                {
+                    return crow::response(500, "user record not found");
+                }
+                customer_identifier = *email_opt;
+            }
+            else
+            {
+                const auto body = crow::json::load(request.body);
+                if (!body || !body.has("customer_id") || body["customer_id"].t() != crow::json::type::String)
+                {
+                    return crow::response(400, "customer_id is required when no Authorization header provided");
+                }
+                customer_identifier = body["customer_id"].s();
+            }
+
+            DBBookingService event_service(db.get(), std::chrono::minutes(10), event_id);
+            const auto result = event_service.confirm_held_seats(customer_identifier);
+            crow::json::wvalue response;
+            response["success"] = result.success;
+            response["message"] = result.message;
+            if (result.success) {
+                response["booking_reference"] = result.booking_reference;
+            }
+            return crow::response(result.success ? 200 : 400, response);
+    });
+
+CROW_ROUTE(app, "/api/events/<int>/seats/<string>/hold").methods(crow::HTTPMethod::POST)([&db,get_email_for_user](const crow::request &request, int event_id, const std::string &seat_id)
                                                                                 {
             const auto body = crow::json::load(request.body);
             const std::string auth_hdr = request.get_header_value("Authorization");
