@@ -161,6 +161,7 @@
         }
 
         let pollInterval;
+        let selectedSeats = [];
         function renderEventSeats(eventId) {
             app.innerHTML = `
                 <div class="panel-split">
@@ -191,7 +192,7 @@
                 }
             });
 
-            const loadSeats = () => {
+            window.loadSeats = () => {
                 api(`/api/events/${eventId}/seats`).then(data => {
                     let mapHtml = '';
                     let currentRow = -1;
@@ -212,7 +213,11 @@
                             }
                             currentCol = s.column_number;
                         }
-                        mapHtml += `<div class="seat ${s.status}" onclick="holdSeat(${eventId}, '${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
+                        
+                        let cls = s.status;
+                        if (selectedSeats.includes(s.id)) cls += ' selected';
+                        mapHtml += `<div class="seat ${cls}" onclick="toggleSeat('${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
+
                         
                         if (!categoryCounts[s.category]) categoryCounts[s.category] = { total: 0, available: 0 };
                         categoryCounts[s.category].total++;
@@ -221,13 +226,26 @@
                     document.getElementById('seat-map').innerHTML = mapHtml;
 
                     // Waitlist UI
+                    
                     let waitlistHtml = '<h3>Waitlist</h3><p>If a category is sold out, join the waitlist!</p>';
+                    waitlistHtml += 'Count: <input type="number" id="waitlistCount" value="1" min="1" style="width: 50px;"> ';
                     Object.keys(categoryCounts).forEach(cat => {
                         if (categoryCounts[cat].available === 0 && categoryCounts[cat].total > 0) {
                             waitlistHtml += `<button onclick="joinWaitlist(${eventId}, '${cat}')">Join ${cat} Waitlist</button> `;
                         }
                     });
+
                     document.getElementById('waitlist-actions').innerHTML = waitlistHtml;
+
+                    let actionsHtml = '';
+                    if (selectedSeats.length > 0) {
+                        actionsHtml += `<button onclick="holdSelectedSeats(${eventId})">Hold Selected Seats</button>`;
+                    }
+                    if (token && data.seats.some(s => s.status === 'held')) {
+                        actionsHtml += `<button onclick="confirmHeldSeats(${eventId})">Confirm Held Seats</button>`;
+                    }
+                    document.getElementById('actions').innerHTML = actionsHtml;
+
 
                 }).catch(e => console.error(e));
             };
@@ -235,11 +253,43 @@
             pollInterval = setInterval(loadSeats, 5000);
         }
 
+        
         window.joinWaitlist = async function(eventId, category) {
             if (!token) return alert('Please login first');
+            const count = parseInt(document.getElementById('waitlistCount').value) || 1;
             try {
-                await api(`/api/events/${eventId}/waitlist`, 'POST', { category });
-                alert(`Successfully joined the waitlist for ${category}! You will be emailed if a seat opens up.`);
+                await api(`/api/events/${eventId}/waitlist`, 'POST', { category, count });
+                alert(`Successfully joined the waitlist for ${count} seat(s) in ${category}! You will be emailed.`);
+            } catch (e) { alert(e.message); }
+        };
+
+
+        
+        window.toggleSeat = function(seatId, status) {
+            if (!token) return alert('Please login first');
+            if (status !== 'available') return;
+            const idx = selectedSeats.indexOf(seatId);
+            if (idx === -1) selectedSeats.push(seatId);
+            else selectedSeats.splice(idx, 1);
+            loadSeats();
+        };
+
+        window.holdSelectedSeats = async function(eventId) {
+            if (selectedSeats.length === 0) return;
+            if (!token) return alert('Please login first');
+            try {
+                await api(`/api/events/${eventId}/hold-bulk`, 'POST', { seat_ids: selectedSeats });
+                alert('Seats held! You have 10 minutes to confirm.');
+                selectedSeats = [];
+                loadSeats();
+            } catch (e) { alert(e.message); }
+        };
+
+        window.confirmHeldSeats = async function(eventId) {
+            try {
+                await api(`/api/events/${eventId}/confirm-held`, 'POST');
+                alert('Booking Confirmed!');
+                window.location.hash = '#my-bookings';
             } catch (e) { alert(e.message); }
         };
 
