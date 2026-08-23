@@ -1,13 +1,13 @@
 FROM debian:bookworm AS build
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates libboost-system-dev libboost-date-time-dev libsqlite3-dev libssl-dev \
+    && apt-get install -y --no-install-recommends build-essential cmake git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY . .
 RUN cmake -S . -B build -DBUILD_TESTING=OFF \
-    && cmake --build build --config Release -j2 -v
+    && cmake --build build --config Release -j2
 
 FROM debian:bookworm-slim
 

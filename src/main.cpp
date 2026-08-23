@@ -523,36 +523,6 @@ int main()
             return crow::response(response); });
 
 
-
-    CROW_ROUTE(app, "/api/events/<int>").methods(crow::HTTPMethod::DELETE)([&db, &require_role](const crow::request &request, int event_id)
-    {
-        const auto auth = require_role(request, {"admin"});
-        if (!auth.has_value()) return crow::response(403, "admin role required");
-        
-        // We should delete event_seats, event_prices, bookings, booking_seats, waitlist_entries
-        // To do this simply without complex transactions:
-        const char* queries[] = {
-            "DELETE FROM waitlist_entries WHERE event_id = ?;",
-            "DELETE FROM booking_seats WHERE booking_id IN (SELECT id FROM bookings WHERE event_id = ?);",
-            "DELETE FROM bookings WHERE event_id = ?;",
-            "DELETE FROM event_seats WHERE event_id = ?;",
-            "DELETE FROM event_prices WHERE event_id = ?;",
-            "DELETE FROM events WHERE id = ?;"
-        };
-        for (const char* q : queries) {
-            sqlite3_stmt *stmt = nullptr;
-            if (sqlite3_prepare_v2(db.get(), q, -1, &stmt, nullptr) == SQLITE_OK) {
-                sqlite3_bind_int(stmt, 1, event_id);
-                sqlite3_step(stmt);
-                sqlite3_finalize(stmt);
-            }
-        }
-        
-        crow::json::wvalue response;
-        response["success"] = true;
-        return crow::response(200, response);
-    });
-
     CROW_ROUTE(app, "/api/events/<int>/summary").methods(crow::HTTPMethod::GET)([&db, &require_role](const crow::request &request, int event_id)
     {
         const auto auth = require_role(request, {"organiser", "admin"});
