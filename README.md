@@ -11,7 +11,7 @@ A full-stack movie/concert ticket booking platform built in **C++17** using the 
 ## Features
 
 ### Core Booking
-- **Interactive Seat Map** — Real-time visual grid with color-coded status (available / held / booked). Seats update every 5 seconds via polling. Row labels (A, B, C…) and a colour legend are shown for easy navigation.
+- **Interactive Seat Map** — Real-time visual grid with color-coded status (available / held / booked). Seats update every 5 seconds via polling.
 - **Seat Hold with TTL** — Configurable time-to-live for seat holds (default 10 minutes). Background thread auto-releases expired holds.
 - **Booking Confirmation** — Hold → Confirm two-step flow with atomic database transactions preventing double-bookings.
 - **Booking Cancellation** — Customers can cancel confirmed bookings, triggering waitlist cascade.
@@ -20,7 +20,6 @@ A full-stack movie/concert ticket booking platform built in **C++17** using the 
 - **Visual Seat Builder** — Admin drag-and-click grid builder for venue layouts. Supports Standard, Premium, VIP, and Disabled seat categories.
 - **Disabled Seat Gaps** — Disabled seats maintain their grid positions, preserving venue layout with visible gaps.
 - **Event Creation** — Organisers create events tied to venues with category-based pricing.
-- **Event Poster Upload** — Organisers can upload a poster image (JPEG/PNG/WebP) when creating an event. Posters are served statically and displayed on the Events page, Seat Selection panel, and My Bookings page.
 - **Venue Double-Booking Prevention** — Events at the same venue within 3 hours are rejected.
 
 ### Waitlist System
@@ -34,7 +33,7 @@ A full-stack movie/concert ticket booking platform built in **C++17** using the 
 - **Salted Password Hashing** — SHA-256 with random 16-byte salt per user.
 - **Role-Based Access Control (RBAC):**
   - **Admin** — Venue creation, event deletion, full analytics.
-  - **Organiser** — Event creation, poster upload, per-event revenue/seat analytics.
+  - **Organiser** — Event creation, per-event revenue/seat analytics.
   - **Customer** — Browsing, booking, waitlist, booking management.
 
 ### Email & Notifications
@@ -124,18 +123,11 @@ DB_PATH=booking.db
 # Build the image
 docker build -t ticket-booking .
 
-# Run the container (persisting data and uploaded posters)
-docker run -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/posters:/app/posters \
-  --env-file .env \
-  ticket-booking
+# Run the container (persisting data)
+docker run -p 8080:8080 -v $(pwd)/data:/app/data --env-file .env ticket-booking
 ```
 
-> **Note:** Mounting `posters/` as a volume ensures poster images uploaded by organisers survive container restarts and image upgrades.
-
 ### Local Build (Linux)
-
 **1. Install system dependencies:**
 ```bash
 sudo apt-get update
@@ -145,14 +137,14 @@ sudo apt-get install -y build-essential cmake git \
     ca-certificates
 ```
 
-**2. Configure and build** (CMake automatically downloads the Crow framework via `FetchContent` — requires internet access at build time):
+**2. Configure and build** (CMake automatically downloads the Crow framework via `FetchContent` â€” requires internet access at build time):
 ```bash
 rm -rf build
 cmake -S . -B build -DBUILD_TESTING=OFF
 cmake --build build -j$(nproc)
 ```
 
-**3. First run — fresh database:**
+**3. First run â€” fresh database:**
 
 If upgrading from an older version (without `poster_url`), delete the old database first so the new schema is applied:
 ```bash
@@ -176,7 +168,7 @@ DB_PATH=./data/booking.db PORT=8080 ./build/ticket_booking_app
 ### Default Accounts
 On first run, the system seeds:
 - **Admin:** `admin@admin.com` / `password123`
-- **Demo Events:** Coldplay Live (concert) and Dune: Part Two (movie) with a 6×10 seat grid and poster images from the `posters/` directory.
+- **Demo Events:** Coldplay Live (concert) and Dune: Part Two (movie) with a 6×10 seat grid.
 
 ---
 
@@ -198,23 +190,15 @@ On first run, the system seeds:
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `POST` | `/api/events` | Organiser/Admin | Create event. Body: `{ venue_id, title, event_type, starts_at, prices: [{ category, price_cents }] }` |
-| `GET` | `/api/events` | None | List all events (includes `poster_url`) |
+| `GET` | `/api/events` | None | List all events |
 | `GET` | `/api/events/:id/summary` | Organiser/Admin | Revenue and seat count analytics |
-| `POST` | `/api/events/:id/poster` | Organiser/Admin | Upload a poster image. Send raw image bytes with `Content-Type: image/jpeg` (or `image/png`, `image/webp`) |
-
-### Poster Images
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/api/posters/:filename` | None | Serve a poster image file from the `posters/` directory |
 
 ### Seat Operations (Customer)
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | `GET` | `/api/events/:id/seats` | None | Get seat map with statuses and prices |
-| `POST` | `/api/events/:id/hold-bulk` | Customer | Hold multiple seats atomically. Body: `{ seat_ids: [...] }` |
-| `POST` | `/api/events/:id/confirm-held` | Customer | Confirm all currently held seats |
-| `POST` | `/api/events/:id/seats/:seatId/hold` | Customer | Hold a single seat (10-min TTL) |
-| `POST` | `/api/events/:id/seats/:seatId/confirm` | Customer | Confirm a single held seat |
+| `POST` | `/api/events/:id/seats/:seatId/hold` | Customer | Hold a seat (10-min TTL) |
+| `POST` | `/api/events/:id/seats/:seatId/confirm` | Customer | Confirm a held seat |
 | `POST` | `/api/events/:id/seats/:seatId/cancel` | Customer | Cancel a booking |
 
 ### Waitlist (Customer)
@@ -226,7 +210,7 @@ On first run, the system seeds:
 ### Bookings (Customer)
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| `GET` | `/api/me/bookings` | Customer | List user's bookings (includes `poster_url`) |
+| `GET` | `/api/me/bookings` | Customer | List user's bookings |
 | `POST` | `/api/me/bookings/:id/cancel` | Customer | Cancel a booking by ID |
 
 ### Utility
@@ -245,52 +229,9 @@ users ─────────────┐
   role             │      id, title,             id, seat_label,
                    │      venue_id,              category, status,
 venues ────────────┤      event_type,            held_by → users
-  id, name         │      starts_at,
-                   │      poster_url
-venue_seats ───────┘          │
-  seat_label,                 ├──→ event_prices (category, price_cents)
-  row_number,                 │
-  column_number               ├──→ bookings ──→ booking_seats
-                              │      booking_reference,
-                              │      total_cents, status
-                              │
-                              └──→ waitlist_entries ──→ waitlist_offers
-                                     category, status      token_hash,
-                                                           expires_at
-```
-
-10 tables total: `users`, `venues`, `venue_seats`, `events`, `event_prices`, `event_seats`, `bookings`, `booking_seats`, `waitlist_entries`, `waitlist_offers`.
-
----
-
-## Testing
-
-```bash
-cmake -S . -B build -DBUILD_TESTING=ON -DUSE_CROW=OFF
-cmake --build build
-cd build && ctest --output-on-failure
-```
-
-4 test suites:
-- `booking_service_tests` — In-memory seat hold/confirm/cancel logic
-- `auth_tests` — Password hashing and JWT issue/verify
-- `db_booking_service_tests` — Full SQLite-backed booking flows
-- `email_tests` — Email HTML generation and QR URL building
-
----
-
-## System Design
-
-For detailed architectural decisions on concurrency, waitlist cascading, and time-limited offers, see [`SYSTEM_DESIGN.md`](SYSTEM_DESIGN.md).
-
----
-
-## Project Structure
-
-```
-├── CMakeLists.txt              # Build configuration (FetchContent for Crow)
-├── Dockerfile        ```
-��───┘          ├──→ event_prices (category, price_cents)
+  id, name         │      starts_at
+                   │          │
+venue_seats ───────┘          ├──→ event_prices (category, price_cents)
   seat_label,                 │
   row_number,                 ├──→ bookings ──→ booking_seats
   column_number               │      booking_reference,
