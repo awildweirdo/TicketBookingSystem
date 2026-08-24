@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS events (
     title TEXT NOT NULL,
     event_type TEXT NOT NULL CHECK (event_type IN ('movie', 'concert')),
     starts_at TEXT NOT NULL,
+    poster_url TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -14,6 +14,9 @@
 #include <utility>
 #include <thread>
 #include <atomic>
+#include <fstream>
+#include <sstream>
+#include <algorithm>
 
 namespace
 {
@@ -70,14 +73,14 @@ int main()
     if (db.get())
     {
         char *seed_err = nullptr;
-        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO venues(id, name) VALUES(1, 'Demo Venue');", nullptr, nullptr, &seed_err);
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO venues(id, name) VALUES(1, 'Starlight Arena');", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
         sqlite3_exec(db.get(), "INSERT OR IGNORE INTO users(id, email, password_hash, role) VALUES(1, 'organiser@demo.local', '', 'organiser');", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
-        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at) VALUES(1, 1, 1, 'Coldplay Live', 'concert', datetime('now', '+7 days'));", nullptr, nullptr, &seed_err);
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at, poster_url) VALUES(1, 1, 1, 'Coldplay Live', 'concert', datetime('now', '+7 days'), '/api/posters/coldplay.jpeg');", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
         
-        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at) VALUES(2, 1, 1, 'Dune: Part Two', 'movie', datetime('now', '+1 days'));", nullptr, nullptr, &seed_err);
+        sqlite3_exec(db.get(), "INSERT OR IGNORE INTO events(id, organiser_id, venue_id, title, event_type, starts_at, poster_url) VALUES(2, 1, 1, 'Dune: Part Two', 'movie', datetime('now', '+1 days'), '/api/posters/dune_ii.jpeg');", nullptr, nullptr, &seed_err);
         if (seed_err) { sqlite3_free(seed_err); seed_err = nullptr; }
 
         // Seed prices for event 1 (Coldplay)
@@ -94,7 +97,7 @@ int main()
         sqlite3_stmt *check_stmt = nullptr;
         if (sqlite3_prepare_v2(db.get(), "SELECT COUNT(*) FROM event_seats WHERE event_id = 1", -1, &check_stmt, nullptr) == SQLITE_OK) {
             if (sqlite3_step(check_stmt) == SQLITE_ROW && sqlite3_column_int(check_stmt, 0) == 0) {
-                // Also seed venue_seats for Demo Venue so row/column positions are available via JOIN
+                // Also seed venue_seats for Starlight Arena so row/column positions are available via JOIN
                 for (int row = 0; row < 6; ++row) {
                     std::string cat = "Standard";
                     if (row == 0) cat = "VIP";
@@ -104,7 +107,7 @@ int main()
                         std::string seat_id = std::string(1, 'A' + row) + std::to_string(col);
                         sqlite3_stmt* vs_stmt;
                         if (sqlite3_prepare_v2(db.get(), "INSERT OR IGNORE INTO venue_seats(venue_id, seat_label, category, row_number, column_number) VALUES(?, ?, ?, ?, ?)", -1, &vs_stmt, nullptr) == SQLITE_OK) {
-                            sqlite3_bind_int(vs_stmt, 1, 1); // Demo Venue id=1
+                            sqlite3_bind_int(vs_stmt, 1, 1); // Starlight Arena id=1
                             sqlite3_bind_text(vs_stmt, 2, seat_id.c_str(), -1, SQLITE_STATIC);
                             sqlite3_bind_text(vs_stmt, 3, cat.c_str(), -1, SQLITE_STATIC);
                             sqlite3_bind_int(vs_stmt, 4, row + 1);
@@ -160,6 +163,40 @@ int main()
         response["status"] = "ok";
         response["service"] = "ticket-booking-system";
         return response; });
+
+    // Serve poster images from the posters/ directory
+    CROW_ROUTE(app, "/api/posters/<string>")([](const std::string &filename)
+    {
+        // Sanitise: reject path-traversal attempts
+        if (filename.find("..") != std::string::npos || filename.find('/') != std::string::npos || filename.find('\\') != std::string::npos)
+        {
+            return crow::response(400, "invalid filename");
+        }
+        std::string path = "posters/" + filename;
+        std::ifstream file(path, std::ios::binary);
+        if (!file.is_open())
+        {
+            return crow::response(404, "poster not found");
+        }
+        std::ostringstream oss;
+        oss << file.rdbuf();
+        std::string content = oss.str();
+
+        // Determine content type from extension
+        std::string content_type = "image/jpeg";
+        std::string lower_name = filename;
+        std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+        if (lower_name.size() >= 4 && lower_name.substr(lower_name.size() - 4) == ".png")
+            content_type = "image/png";
+        else if (lower_name.size() >= 5 && lower_name.substr(lower_name.size() - 5) == ".webp")
+            content_type = "image/webp";
+
+        crow::response res(200);
+        res.set_header("Content-Type", content_type);
+        res.set_header("Cache-Control", "public, max-age=86400");
+        res.body = std::move(content);
+        return res;
+    });
 
     CROW_ROUTE(app, "/api/events/<int>/seats")([&db](int event_id)
                                   {
@@ -568,12 +605,64 @@ int main()
             return crow::response(201, resp);
         });
 
+    // Upload poster image for an event
+    CROW_ROUTE(app, "/api/events/<int>/poster").methods(crow::HTTPMethod::POST)([&db, &require_role](const crow::request &request, int event_id)
+    {
+        const auto auth = require_role(request, {"organiser", "admin"});
+        if (!auth.has_value())
+        {
+            return crow::response(403, "organiser or admin role required");
+        }
+
+        if (request.body.empty())
+        {
+            return crow::response(400, "poster image data is required");
+        }
+
+        // Determine file extension from Content-Type
+        std::string content_type = request.get_header_value("Content-Type");
+        std::string ext = ".jpeg";
+        if (content_type.find("png") != std::string::npos) ext = ".png";
+        else if (content_type.find("webp") != std::string::npos) ext = ".webp";
+
+        std::string filename = std::to_string(event_id) + ext;
+        std::string filepath = "posters/" + filename;
+
+        // Write the image data to file
+        std::ofstream out(filepath, std::ios::binary | std::ios::trunc);
+        if (!out.is_open())
+        {
+            return crow::response(500, "failed to save poster file");
+        }
+        out.write(request.body.data(), static_cast<std::streamsize>(request.body.size()));
+        out.close();
+
+        // Update poster_url in database
+        std::string poster_url = "/api/posters/" + filename;
+        sqlite3_stmt *stmt = nullptr;
+        const char *sql = "UPDATE events SET poster_url = ? WHERE id = ?;";
+        if (sqlite3_prepare_v2(db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK)
+        {
+            sqlite3_finalize(stmt);
+            return crow::response(500, "db error");
+        }
+        sqlite3_bind_text(stmt, 1, poster_url.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, event_id);
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
+
+        crow::json::wvalue resp;
+        resp["success"] = true;
+        resp["poster_url"] = poster_url;
+        return crow::response(200, resp);
+    });
+
     CROW_ROUTE(app, "/api/events").methods(crow::HTTPMethod::GET)([&db]
                                                                     {
             crow::json::wvalue response;
             crow::json::wvalue event_list;
             sqlite3_stmt *stmt = nullptr;
-            const char *sql = "SELECT id, title, event_type, starts_at, venue_id, organiser_id FROM events ORDER BY id ASC;";
+            const char *sql = "SELECT id, title, event_type, starts_at, venue_id, organiser_id, poster_url FROM events ORDER BY id ASC;";
             if (sqlite3_prepare_v2(db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK)
             {
                 sqlite3_finalize(stmt);
@@ -592,6 +681,8 @@ int main()
                 item["starts_at"] = starts_at ? reinterpret_cast<const char *>(starts_at) : "";
                 item["venue_id"] = sqlite3_column_int(stmt, 4);
                 item["organiser_id"] = sqlite3_column_int(stmt, 5);
+                const unsigned char *poster_url = sqlite3_column_text(stmt, 6);
+                item["poster_url"] = poster_url ? reinterpret_cast<const char *>(poster_url) : "";
                 event_list[static_cast<unsigned>(index++)] = std::move(item);
             }
             sqlite3_finalize(stmt);
@@ -759,7 +850,7 @@ int main()
         crow::json::wvalue response;
         crow::json::wvalue bookings;
         sqlite3_stmt *stmt = nullptr;
-        const char *sql = "SELECT b.id, b.booking_reference, b.event_id, b.status, b.total_cents, e.title "
+        const char *sql = "SELECT b.id, b.booking_reference, b.event_id, b.status, b.total_cents, e.title, e.poster_url "
                           "FROM bookings b JOIN events e ON e.id = b.event_id "
                           "WHERE b.customer_id = ? ORDER BY b.created_at DESC;";
         if (sqlite3_prepare_v2(db.get(), sql, -1, &stmt, nullptr) != SQLITE_OK) return crow::response(500, "db error");
@@ -773,6 +864,8 @@ int main()
             b["status"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
             b["total_cents"] = sqlite3_column_int(stmt, 4);
             b["event_title"] = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+            const unsigned char *poster_url = sqlite3_column_text(stmt, 6);
+            b["poster_url"] = poster_url ? reinterpret_cast<const char*>(poster_url) : "";
             bookings[index++] = std::move(b);
         }
         sqlite3_finalize(stmt);

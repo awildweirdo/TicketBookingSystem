@@ -20,12 +20,14 @@ WORKDIR /app
 COPY --from=build /app/build/ticket_booking_app /app/ticket_booking_app
 COPY --from=build /app/public /app/public
 COPY --from=build /app/database /app/database
+COPY --from=build /app/posters /app/posters
 
-RUN mkdir -p /app/data && chown appuser:appuser /app/data
+RUN mkdir -p /app/data && chown appuser:appuser /app/data \
+    && chown -R appuser:appuser /app/posters
 
 USER appuser
 EXPOSE 8080
 ENV PORT=8080
 ENV DB_PATH=/app/data/booking.db
-VOLUME ["/app/data"]
+VOLUME ["/app/data", "/app/posters"]
 CMD ["/app/ticket_booking_app"]

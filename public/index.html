@@ -38,13 +38,15 @@
         .container { max-width: 1200px; margin: 0 auto; padding: 32px 20px; }
 
         .nav { 
-            background-color: var(--nav-bg); 
+            background-color: rgba(11, 17, 32, 0.85); 
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             padding: 16px 30px; 
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); 
             position: sticky; 
             top: 0; 
             z-index: 100; 
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         .nav a { 
             color: var(--text-light); 
@@ -56,7 +58,7 @@
         }
         .nav a:hover, .nav a.active { 
             background-color: rgba(99, 102, 241, 0.15); 
-            color: var(--primary-hover); 
+            color: #ffffff; 
         }
         .nav-content { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
         .nav-links { display: flex; align-items: center; gap: 12px; }
@@ -82,12 +84,15 @@
             font-weight: 500; 
             transition: all 0.2s ease; 
             font-family: inherit;
+            width: 100%;
         }
         button:hover { 
             background-color: var(--primary-hover); 
             transform: translateY(-2px); 
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
         }
+        button.danger { background-color: var(--booked); }
+        button.danger:hover { background-color: #dc2626; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3); }
         
         input, select, textarea { 
             padding: 12px 16px; 
@@ -137,52 +142,139 @@
             margin-bottom: 24px; 
             border: 1px solid var(--border-color); 
             box-shadow: inset 0 2px 15px rgba(0,0,0,0.2);
+            width: 100%;
+            overflow-x: auto;
+            box-sizing: border-box;
         }
         .panel-split { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; }
         @media (max-width: 900px) { .panel-split { grid-template-columns: 1fr; } }
         
         .error { color: var(--booked); font-weight: 500; }
         
-        .event-card { 
-            border: 1px solid var(--border-color); 
-            padding: 24px; 
-            border-radius: 12px; 
-            margin-bottom: 20px; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
+        .screen-indicator {
+            text-align: center;
+            margin: 0 auto 30px auto;
+            padding: 15px 0;
+            background: linear-gradient(180deg, rgba(99,102,241,0.2) 0%, transparent 100%);
+            border-top: 4px solid var(--primary);
+            border-radius: 50% 50% 0 0 / 20px 20px 0 0;
+            color: var(--text-light);
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            width: 90%;
+            box-shadow: 0 -10px 20px rgba(99,102,241,0.1);
+        }
+
+        .poster-large {
+            width: 100%;
+            max-height: 350px;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            margin-top: 16px;
+        }
+
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .event-card {
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            background: rgba(30, 41, 59, 0.5);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+        .event-card:hover {
+            border-color: var(--primary);
+            background: var(--card-bg);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3), 0 10px 10px -5px rgba(0,0,0,0.2);
+        }
+
+        .event-card .poster-thumb {
+            width: 100%;
+            height: 380px;
+            object-fit: cover;
+            border-radius: 0;
+            border: none;
+            transition: transform 0.5s ease;
+        }
+        .event-card:hover .poster-thumb {
+            transform: scale(1.05);
+        }
+
+        .event-card .poster-placeholder {
+            width: 100%;
+            height: 380px;
+            border-radius: 0;
+            border: none;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .event-info {
+            padding: 20px;
+            flex: 1;
+            z-index: 1;
+            background: linear-gradient(0deg, var(--card-bg) 0%, rgba(30,41,59,0.9) 100%);
+        }
+        .event-info p { margin: 8px 0; color: var(--text-light); font-size: 14px; }
+        .event-info h3 { color: #ffffff; margin-top: 0; font-size: 22px; margin-bottom: 16px; font-weight: 700; }
+        
+        .event-actions {
+            padding: 0 20px 20px 20px;
+            display: flex;
+            gap: 12px;
+            z-index: 1;
+            background: var(--card-bg);
+        }
+
+        /* List style for bookings page */
+        .booking-card {
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 24px;
             background: rgba(30, 41, 59, 0.5);
             transition: all 0.2s ease;
         }
-        .event-card:hover { 
-            border-color: var(--primary); 
-            background: var(--card-bg); 
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        .booking-card:hover {
+            border-color: var(--primary);
+            background: var(--card-bg);
         }
-        .event-info p { margin: 6px 0; color: var(--text-light); }
-        .event-info h3 { color: #ffffff; margin-top: 0; font-size: 20px; margin-bottom: 12px; }
-        
-        .screen-indicator {
-            text-align: center;
-            margin: 0 auto 20px auto;
-            padding: 10px 0;
-            background: linear-gradient(180deg, rgba(99,102,241,0.3) 0%, transparent 100%);
-            border-top: 3px solid var(--primary);
-            border-radius: 0 0 50% 50%;
-            color: var(--text-light);
-            font-size: 12px;
-            font-weight: 600;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            width: 80%;
+        .booking-card .poster-thumb {
+            width: 80px;
+            height: 112px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
         }
+        .booking-card .poster-placeholder {
+            width: 80px;
+            height: 112px;
+            border-radius: 8px;
+            font-size: 24px;
+        }
+        .booking-card button { width: auto; }
 </style>
 </head>
 <body>
     <div class="nav">
         <div class="nav-content">
             <div class="nav-links">
+                <a href="#events" style="font-size: 18px; font-weight: 700; color: #ffffff; letter-spacing: -0.03em; margin-right: 8px; display: flex; align-items: center; gap: 8px; padding: 0;">
+                    🎫 <span>TicketVault</span>
+                </a>
                 <a href="#events">Events</a>
                 <span id="nav-user-left" class="hidden" style="display: flex; align-items: center; gap: 15px;">
                     <a href="#my-bookings">My Bookings</a>
@@ -252,40 +344,49 @@
         };
 
         function renderEvents() {
-            app.innerHTML = `<div class="card"><h2>Events</h2><div id="events-list">Loading...</div>`;
+            app.innerHTML = `
+            <div style="text-align:center; padding: 60px 20px 40px; background: linear-gradient(180deg, rgba(99,102,241,0.08) 0%, transparent 100%); margin: -32px -20px 40px; border-bottom: 1px solid var(--border-color);">
+                <div style="font-size:13px; font-weight:600; letter-spacing:4px; text-transform:uppercase; color:var(--primary); margin-bottom:12px;">Now Showing & Coming Soon</div>
+                <h1 style="font-size: clamp(28px, 5vw, 48px); font-weight: 800; margin: 0 0 12px; background: linear-gradient(135deg, #ffffff 0%, #818cf8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: -0.03em;">Featured Events</h1>
+                <p style="color: var(--text-light); font-size: 16px; margin: 0;">Pick your seats, book your moment.</p>
+            </div>
+            <div id="events-list" class="events-grid">Loading...</div>`;
             Promise.all([api('/api/events'), api('/api/venues')]).then(([eventsData, venuesData]) => {
                 const venuesMap = {};
                 if (venuesData.venues) venuesData.venues.forEach(v => venuesMap[v.id] = v.name);
                 
                 const list = eventsData.events.map(e => `<div class="event-card">
+                    ${e.poster_url ? `<img src="${e.poster_url}" alt="${e.title} poster" class="poster-thumb">` : `<div class="poster-placeholder">🎬</div>`}
                     <div class="event-info">
-                        <h3 style="margin-top:0;">${e.title} <small style="color:#64748b; font-weight:normal;">(${e.event_type})</small></h3>
-                        <p><strong>Venue:</strong> ${venuesMap[e.venue_id] || 'Unknown'}</p>
-                        <p><strong>Time:</strong> ${e.starts_at}</p>
+                        <h3>${e.title} <small style="color:#94a3b8; font-size:14px; font-weight:normal;">(${e.event_type})</small></h3>
+                        <p>📍 ${venuesMap[e.venue_id] || 'Unknown'}</p>
+                        <p>🕒 ${e.starts_at}</p>
                     </div>
-                    <div>
-                        <button onclick="window.location.hash='#event-${e.id}'">View Seats</button>
-                        ${role === 'admin' ? `<button onclick="deleteEvent(${e.id})" style="background: var(--booked); margin-left: 10px;">Delete</button>` : ''}
+                    <div class="event-actions">
+                        <button onclick="window.location.hash='#event-${e.id}'">Book Now</button>
+                        ${role === 'admin' ? `<button onclick="deleteEvent(${e.id})" class="danger">Delete</button>` : ''}
                     </div>
                 </div>`).join('');
-                document.getElementById('events-list').innerHTML = list || 'No events.'; app.innerHTML += '</div>';
-            }).catch(e => { document.getElementById('events-list').innerHTML = `<p class="error">${e.message}</p>`; });
+                document.getElementById('events-list').innerHTML = list || '<p style="margin-left:20px;">No events currently scheduled.</p>';
+            }).catch(e => { document.getElementById('events-list').innerHTML = `<p class="error" style="margin-left:20px;">${e.message}</p>`; });
         }
 
         let pollInterval;
         let selectedSeats = [];
         function renderEventSeats(eventId) {
             app.innerHTML = `
+                <div style="margin-bottom: 16px;">
+                    <a href="#events" style="color:var(--text-light); text-decoration:none; font-size:14px; display:inline-flex; align-items:center; gap:6px; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color=''">← Back to Events</a>
+                </div>
                 <div class="panel-split">
                     <div class="card">
-                        <h2>Event ${eventId} Seats</h2>
+                        <h2 id="seat-page-title" style="font-size:22px;">Loading seats...</h2>
                         <div class="seat-map-container"><div id="seat-map">Loading...</div></div>
                         <div id="actions"></div>
                         <div id="waitlist-actions" style="margin-top: 20px;"></div>
                     </div>
-                    <div class="card" id="event-details-panel" style="align-self: start;">
-                        <h3>Event Details</h3>
-                        <p>Loading...</p>
+                    <div class="card" id="event-details-panel" style="align-self: start; position: sticky; top: 90px;">
+                        <p style="color:var(--text-light);">Loading details...</p>
                     </div>
                 </div>
             `;
@@ -294,12 +395,30 @@
             Promise.all([api('/api/events'), api('/api/venues')]).then(([eventsData, venuesData]) => {
                 const ev = eventsData.events.find(e => e.id == eventId);
                 const vName = venuesData.venues ? venuesData.venues.find(v => v.id == ev.venue_id)?.name : '';
+                const titleEl = document.getElementById('seat-page-title');
+                if (titleEl) titleEl.textContent = ev ? ev.title : `Event ${eventId} Seats`;
                 if(ev) {
                     document.getElementById('event-details-panel').innerHTML = `
-                        <h3>${ev.title}</h3>
-                        <p><strong>Type:</strong> ${ev.event_type}</p>
-                        <p><strong>Time:</strong> ${ev.starts_at}</p>
-                        <p><strong>Venue:</strong> ${vName || ev.venue_id}</p>
+                        ${ev.poster_url ? `<img src="${ev.poster_url}" class="poster-large" alt="${ev.title} poster" style="margin-top:0; margin-bottom:20px;">` : ''}
+                        <h3 style="margin-top:0;">${ev.title}</h3>
+                        <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+                            <div style="display:flex; justify-content:space-between; font-size:14px;">
+                                <span style="color:var(--text-light);">Type</span>
+                                <span style="text-transform:capitalize; font-weight:500;">${ev.event_type}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:14px;">
+                                <span style="color:var(--text-light);">Date & Time</span>
+                                <span style="font-weight:500;">${ev.starts_at}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; font-size:14px;">
+                                <span style="color:var(--text-light);">Venue</span>
+                                <span style="font-weight:500;">${vName || ev.venue_id}</span>
+                            </div>
+                        </div>
+                        <div style="border-top:1px solid var(--border-color); padding-top:16px;">
+                            <p style="font-size:12px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:var(--text-light); margin:0 0 12px;">How to Book</p>
+                            <p style="font-size:13px; color:var(--text-light); margin:0; line-height:1.6;">Click a <span style="color:#10b981; font-weight:600;">green</span> seat to select it, then press <strong style="color:#fff;">Hold Selected Seats</strong>. You'll have 10 minutes to confirm your booking.</p>
+                        </div>
                     `;
                 }
             });
@@ -319,15 +438,17 @@
 
                     const categoryCounts = {};
                     let mapHtml = '<div class="screen-indicator">SCREEN</div>';
-                    mapHtml += `<div class="seat-grid" style="display:grid; grid-template-columns: repeat(${maxCol}, 48px); gap: 6px; justify-content: center;">`;
+                    mapHtml += `<div style="display:grid; grid-template-columns: 28px repeat(${maxCol}, 48px); gap: 6px; justify-content: center; align-items: center;">`;
                     
                     for (let r = 1; r <= maxRow; r++) {
+                        // Row label
+                        mapHtml += `<div style="color:var(--text-light); font-size:12px; font-weight:600; text-align:center;">${String.fromCharCode(64+r)}</div>`;
                         for (let c = 1; c <= maxCol; c++) {
                             const s = seatMap[r + '-' + c];
                             if (s) {
                                 let cls = s.status;
                                 if (selectedSeats.includes(s.id)) cls += ' selected';
-                                mapHtml += `<div class="seat ${cls}" onclick="toggleSeat('${s.id}', '${s.status}')" title="${s.category} - $${s.price_cents/100}">${s.id}</div>`;
+                                mapHtml += `<div class="seat ${cls}" onclick="toggleSeat('${s.id}', '${s.status}')" title="${s.category} ${s.id} — $${s.price_cents/100}">${s.id}</div>`;
                                 
                                 if (!categoryCounts[s.category]) categoryCounts[s.category] = { total: 0, available: 0 };
                                 categoryCounts[s.category].total++;
@@ -338,6 +459,13 @@
                         }
                     }
                     mapHtml += '</div>';
+                    // Legend
+                    mapHtml += `<div style="display:flex; gap:16px; justify-content:center; margin-top:24px; flex-wrap:wrap;">
+                        <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);"><span style="width:14px;height:14px;border-radius:4px;background:rgba(16,185,129,0.3);border:2px solid #10b981;display:inline-block;"></span>Available</span>
+                        <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);"><span style="width:14px;height:14px;border-radius:4px;background:var(--primary);display:inline-block;"></span>Selected</span>
+                        <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);"><span style="width:14px;height:14px;border-radius:4px;background:rgba(245,158,11,0.3);border:2px solid #f59e0b;display:inline-block;"></span>Held</span>
+                        <span style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-light);"><span style="width:14px;height:14px;border-radius:4px;background:rgba(239,68,68,0.3);border:2px solid #ef4444;display:inline-block;"></span>Booked</span>
+                    </div>`;
                     document.getElementById('seat-map').innerHTML = mapHtml;
 
                     // Waitlist UI
@@ -439,13 +567,22 @@
         };
 
         function renderAuth(isLogin) {
-            app.innerHTML = `<div class='auth-container card'><h2>${isLogin ? 'Login' : 'Register'}</h2>
+            app.innerHTML = `<div class='auth-container card'>
+                <div style="text-align:center; margin-bottom:28px;">
+                    <div style="font-size:36px; margin-bottom:12px;">${isLogin ? '🔑' : '🎫'}</div>
+                    <h2 style="margin:0 0 6px;">${isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+                    <p style="margin:0; color:var(--text-light); font-size:14px;">${isLogin ? 'Sign in to access your bookings' : 'Join to start booking events'}</p>
+                </div>
                 <form id="auth-form" onsubmit="event.preventDefault(); authSubmit(${isLogin});">
-                    <input id="email" type="email" placeholder="Email" required><br><br>
-                    <input id="password" type="password" placeholder="Password" required><br><br>
-                    ${!isLogin ? '<select id="role"><option value="customer">Customer</option><option value="organiser">Organiser</option></select><br><br>' : ''}
-                    <button type="submit">${isLogin ? 'Login' : 'Register'}</button>
-                </form></div>`;
+                    <input id="email" type="email" placeholder="Email address" required>
+                    <input id="password" type="password" placeholder="Password" required>
+                    ${!isLogin ? '<select id="role"><option value="customer">Customer</option><option value="organiser">Organiser</option></select>' : ''}
+                    <button type="submit" style="margin-top:4px;">${isLogin ? 'Login' : 'Register'}</button>
+                </form>
+                <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-light);">
+                    ${isLogin ? `Don't have an account? <a href="#register" style="color:var(--primary);">Register</a>` : `Already have an account? <a href="#login" style="color:var(--primary);">Login</a>`}
+                </p>
+            </div>`;
         }
 
         window.authSubmit = async function(isLogin) {
@@ -593,6 +730,8 @@
                     <input id="ev-title" type="text" placeholder="Title" required><br><br>
                     <select id="ev-type"><option value="movie">Movie</option><option value="concert">Concert</option></select><br><br>
                     <input id="ev-starts" type="datetime-local" required><br><br>
+                    <label style="color:var(--text-light);display:block;margin-bottom:8px;">Poster Image (Optional)</label>
+                    <input id="ev-poster" type="file" accept="image/jpeg, image/png, image/webp" style="margin-bottom:20px;"><br>
                     <textarea id="ev-prices" placeholder='[{"category": "Standard", "price_cents": 1000}, {"category": "Premium", "price_cents": 2000}]' rows="3" style="width: 100%;"></textarea><br><br>
                     <button type="submit">Create Event</button>
                 </form>
@@ -626,7 +765,27 @@
                 const event_type = document.getElementById('ev-type').value;
                 const starts_at = document.getElementById('ev-starts').value;
                 const prices = JSON.parse(document.getElementById('ev-prices').value || '[]');
-                await api('/api/events', 'POST', { venue_id, title, event_type, starts_at, prices });
+                
+                const eventRes = await api('/api/events', 'POST', { venue_id, title, event_type, starts_at, prices });
+                
+                const posterFile = document.getElementById('ev-poster').files[0];
+                if (posterFile && eventRes && eventRes.event_id) {
+                    const headers = {};
+                    if (token) headers['Authorization'] = 'Bearer ' + token;
+                    headers['Content-Type'] = posterFile.type;
+                    
+                    const uploadRes = await fetch(`/api/events/${eventRes.event_id}/poster`, {
+                        method: 'POST',
+                        headers: headers,
+                        body: posterFile
+                    });
+                    
+                    if (!uploadRes.ok) {
+                        alert('Event created, but poster upload failed: ' + await uploadRes.text());
+                        return;
+                    }
+                }
+                
                 alert('Event Created!');
             } catch (e) { alert(e.message); }
         };
@@ -650,15 +809,28 @@
             app.innerHTML = `<div class="card"><h2>My Bookings</h2><div id="bookings-list">Loading...</div></div>`;
             api('/api/me/bookings').then(data => {
                 if (!data.bookings || data.bookings.length === 0) {
-                    document.getElementById('bookings-list').innerHTML = '<p style="color: #64748b;">No current bookings</p>';
+                    document.getElementById('bookings-list').innerHTML = `
+                        <div style="text-align:center; padding: 40px 20px; color: var(--text-light);">
+                            <div style="font-size:48px; margin-bottom:16px;">🎟️</div>
+                            <p style="font-size:16px; margin:0;">No bookings yet — <a href="#events" style="color:var(--primary);">browse events</a> to get started!</p>
+                        </div>`;
                     return;
                 }
-                const list = data.bookings.map(b => `<div class="event-card">
-                    <div class="event-info">
-                        <h3 style="margin-top:0;">Booking ${b.booking_reference} - ${b.event_title}</h3>
-                        <p><strong>Status:</strong> ${b.status} | <strong>Total:</strong> $${b.total_cents/100}</p>
+                const statusColor = { confirmed: '#10b981', pending: '#f59e0b', cancelled: '#ef4444' };
+                const list = data.bookings.map(b => `<div class="booking-card">
+                    ${b.poster_url ? `<img src="${b.poster_url}" alt="${b.event_title} poster" class="poster-thumb">` : `<div class="poster-placeholder" style="display:flex;align-items:center;justify-content:center;">🎬</div>`}
+                    <div style="flex:1; min-width:0;">
+                        <h3 style="margin:0 0 6px; font-size:18px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${b.event_title}</h3>
+                        <p style="margin:0 0 8px; font-size:13px; color:var(--text-light);">Ref: <code style="background:#0f172a; padding:2px 6px; border-radius:4px; font-size:12px;">${b.booking_reference}</code></p>
+                        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span style="display:inline-flex; align-items:center; gap:5px; font-size:13px; font-weight:600; color:${statusColor[b.status] || '#94a3b8'};">
+                                <span style="width:8px;height:8px;border-radius:50%;background:${statusColor[b.status] || '#94a3b8'};display:inline-block;"></span>
+                                ${b.status.charAt(0).toUpperCase() + b.status.slice(1)}
+                            </span>
+                            <span style="font-size:13px; color:var(--text-light);">Total: <strong style="color:#fff;">$${(b.total_cents/100).toFixed(2)}</strong></span>
+                        </div>
                     </div>
-                    ${b.status === 'confirmed' ? `<button onclick="cancelBooking(${b.id})" style="background:var(--booked);">Cancel Booking</button>` : ''}
+                    ${b.status === 'confirmed' ? `<button onclick="cancelBooking(${b.id})" class="danger" style="width:auto; flex-shrink:0;">Cancel</button>` : ''}
                 </div>`).join('');
                 document.getElementById('bookings-list').innerHTML = list;
             }).catch(e => { document.getElementById('bookings-list').innerHTML = `<p class="error">${e.message}</p>`; });
