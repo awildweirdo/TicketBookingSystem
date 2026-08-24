@@ -586,7 +586,7 @@
         }
 
         window.authSubmit = async function(isLogin) {
-            const email = document.getElementById('email').value;
+            email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const roleEl = document.getElementById('role');
             const userRole = roleEl ? roleEl.value : 'customer';
