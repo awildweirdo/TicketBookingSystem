@@ -137,7 +137,7 @@ sudo apt-get install -y build-essential cmake git \
     ca-certificates
 ```
 
-**2. Configure and build** (CMake automatically downloads the Crow framework via `FetchContent` â€” requires internet access at build time):
+**2. Configure and build** (CMake automatically downloads the Crow framework via `FetchContent` requires internet access at build time):
 ```bash
 rm -rf build
 cmake -S . -B build -DBUILD_TESTING=OFF
