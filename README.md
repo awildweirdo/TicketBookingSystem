@@ -144,7 +144,7 @@ cmake -S . -B build -DBUILD_TESTING=OFF
 cmake --build build -j$(nproc)
 ```
 
-**3. First run â€” fresh database:**
+**3. First run fresh database:**
 
 If upgrading from an older version (without `poster_url`), delete the old database first so the new schema is applied:
 ```bash
