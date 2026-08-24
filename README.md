@@ -124,7 +124,7 @@ DB_PATH=booking.db
 docker build -t ticket-booking .
 
 # Run the container (persisting data)
-docker run -p 8080:8080 -v $(pwd)/data:/app/data --env-file .env ticket-booking
+docker run -p 8080:8080 -v "$(pwd)/data":/app/data --env-file .env ticket-booking
 ```
 
 ### Local Build (Linux)
